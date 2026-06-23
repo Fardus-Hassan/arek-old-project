@@ -2,7 +2,7 @@ import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 import { getAccessToken } from "@/lib/auth-session";
 
 const baseUrl =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://187.124.176.94:5555/api/v1";
+  process.env.NEXT_PUBLIC_API_URL ?? "https://api.aisizepro.com/api/v1";
 
 export type FileSaveMeta = {
   page: number;

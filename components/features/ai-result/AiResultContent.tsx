@@ -429,7 +429,7 @@ const AiResultContent: React.FC = () => {
       }
 
       const baseUrl =
-        process.env.NEXT_PUBLIC_API_URL ?? "http://187.124.176.94:5555/api/v1";
+        process.env.NEXT_PUBLIC_API_URL ?? "https://api.aisizepro.com/api/v1";
       const csv = buildActiveTabCsv();
       const file = new File([csv], `${safeCsvTitle()}.csv`, {
         type: "text/csv;charset=utf-8",

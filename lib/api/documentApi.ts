@@ -3,7 +3,7 @@ import { getAccessToken } from "@/lib/auth-session";
 import type { ApiEnvelope } from "./types";
 
 const baseUrl =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://187.124.176.94:5555/api/v1";
+  process.env.NEXT_PUBLIC_API_URL ?? "https://api.aisizepro.com/api/v1";
 
 type Meta = {
   page: number;
