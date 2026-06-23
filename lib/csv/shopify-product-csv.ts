@@ -28,7 +28,8 @@ export function buildShopifyProductImportCsv(
 ): string {
   const primaryRow = mapProductToPrimaryRow(product, opts);
   const handle = primaryRow["URL handle"] ?? buildShopifyHandle(product);
-  const imageRows = mapProductToImageRows(product, handle);
+  const stan = primaryRow["Stan (product.metafields.custom.stan)"] ?? "";
+  const imageRows = mapProductToImageRows(product, handle, stan);
 
   const allRows = [primaryRow, ...imageRows];
   const headerLine = SHOPIFY_PRODUCT_IMPORT_COLUMNS.map(escapeCsvCell).join(",");

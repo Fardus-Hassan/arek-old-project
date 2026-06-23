@@ -2,7 +2,14 @@ import type { ProductListingData } from "@/lib/map-document-to-product-listing";
 import {
   DEFAULT_INVENTORY_QTY,
   DEFAULT_WEIGHT_GRAMS,
+  stanForShopifyCsv,
+  googleConditionForShopifyCsv,
 } from "@/lib/shopify-field-options";
+import {
+  toColorMetaobjectHandle,
+  toFabricMetaobjectHandle,
+  toMetaobjectHandleList,
+} from "@/lib/shopify-metaobject-handles";
 import type { ShopifyCsvColumn } from "./shopify-csv-columns";
 
 function isPlaceholder(v: string | undefined | null): boolean {
@@ -85,12 +92,33 @@ function formatTags(tags: string[]): string {
     .join(", ");
 }
 
+function emptyIfZeroNumeric(raw: string): string {
+  const t = raw.trim();
+  if (t === "") return "";
+  const n = Number(t.replace(",", "."));
+  if (!Number.isFinite(n) || n === 0) return "";
+  return String(n);
+}
+
+function extractNumericDim(value: string): string {
+  if (isPlaceholder(value)) return "";
+  const match = value.match(/[\d.]+/);
+  if (!match) return "";
+  return emptyIfZeroNumeric(match[0]);
+}
+
 function normalizePrice(price: string): string {
   const p = price.trim();
   if (!p) return "";
   const n = p.replace(/[^0-9.,-]/g, "").replace(",", ".");
   if (!n || Number.isNaN(Number(n))) return p;
-  return n;
+  return emptyIfZeroNumeric(n);
+}
+
+function csvQuantity(value: string | undefined, fallback: string): string {
+  const t = (value ?? "").trim();
+  if (!t || t === "—") return emptyIfZeroNumeric(fallback);
+  return emptyIfZeroNumeric(t);
 }
 
 function normalizeGender(gender: string): string {
@@ -99,12 +127,6 @@ function normalizeGender(gender: string): string {
   if (g === "men" || g === "man") return "male";
   if (g === "women" || g === "woman") return "female";
   return g;
-}
-
-function extractNumericDim(value: string): string {
-  if (isPlaceholder(value)) return "";
-  const match = value.match(/[\d.]+/);
-  return match ? match[0] : "";
 }
 
 export type ShopifyCsvBuildOpts = {
@@ -129,19 +151,20 @@ export function mapProductToPrimaryRow(
     ? ""
     : product.details.category.trim();
   const size = product.selectedSize.trim();
-  const color = product.selectedColor.trim();
-  const googleCondition = isPlaceholder(product.variants.condition)
-    ? ""
-    : product.variants.condition.trim().toLowerCase();
+  const colorLabel = product.selectedColor.trim();
+  const colorHandle = toMetaobjectHandleList(colorLabel, toColorMetaobjectHandle);
+  const googleCondition = googleConditionForShopifyCsv(product.variants.condition);
   const feature = isPlaceholder(product.variants.feature)
     ? ""
     : product.variants.feature.trim();
-  const fabric = isPlaceholder(product.metafields.fabric)
+  const fabricLabel = isPlaceholder(product.metafields.fabric)
     ? ""
     : product.metafields.fabric.trim();
-  const productCondition = isPlaceholder(product.productCondition)
-    ? ""
-    : product.productCondition.trim();
+  const fabricHandle = toMetaobjectHandleList(
+    fabricLabel,
+    toFabricMetaobjectHandle,
+  );
+  const stan = stanForShopifyCsv(product.productCondition);
   const productCode = isPlaceholder(product.metafields.productCode)
     ? ""
     : product.metafields.productCode.trim();
@@ -153,6 +176,7 @@ export function mapProductToPrimaryRow(
   const firstImage = product.images.find((img) => img.url?.trim());
   const imgUrl = firstImage?.url?.trim() ?? "";
   const imgAlt = firstImage?.label?.trim() ?? "";
+  const weightGrams = csvQuantity(product.weightGrams, DEFAULT_WEIGHT_GRAMS);
 
   return {
     Title: title,
@@ -170,24 +194,24 @@ export function mapProductToPrimaryRow(
     Price: normalizePrice(opts.price),
     "Charge tax": "TRUE",
     "Inventory tracker": "shopify",
-    "Inventory quantity": product.inventoryQty || DEFAULT_INVENTORY_QTY,
+    "Inventory quantity": csvQuantity(product.inventoryQty, DEFAULT_INVENTORY_QTY),
     "Continue selling when out of stock": "DENY",
-    "Weight value (grams)": product.weightGrams || DEFAULT_WEIGHT_GRAMS,
-    "Weight unit for display": "g",
+    "Weight value (grams)": weightGrams,
+    "Weight unit for display": weightGrams ? "g" : "",
     "Requires shipping": "TRUE",
     "Fulfillment service": "manual",
     "Product image URL": imgUrl,
     "Image position": imgUrl ? "1" : "",
     "Image alt text": imgAlt,
     "Gift card": "FALSE",
-    "Color (product.metafields.shopify.color-pattern)": color,
+    "Color (product.metafields.shopify.color-pattern)": colorHandle,
     "Google Shopping / Gender": normalizeGender(product.details.gender),
     "Google Shopping / Condition": googleCondition,
     "Rozmiar (product.metafields.custom.rozmiar)": size,
     "Producent (product.metafields.custom.producent)": vendor,
-    "Stan (product.metafields.custom.stan)": productCondition,
+    "Stan (product.metafields.custom.stan)": stan,
     "Kod produktu: (product.metafields.custom.kod_produktu_)": productCode,
-    "Skład (product.metafields.custom.sk_ad)": fabric,
+    "Skład (product.metafields.custom.sk_ad)": fabricLabel,
     "Szerokość od pachy do pachy (product.metafields.custom.szeroko_od_pachy_do_pachy_)":
       extractNumericDim(product.metafields.chestWidth),
     "Długość tył (product.metafields.custom.d_ugo_ty_)": backOrDress,
@@ -198,14 +222,15 @@ export function mapProductToPrimaryRow(
     "Rozmiar pod biustem (product.metafields.custom.underbust)":
       extractNumericDim(product.metafields.underBust),
     "Wzór (product.metafields.custom.wz_r)": feature,
-    "Fabric (product.metafields.shopify.fabric)": fabric,
+    "Fabric (product.metafields.shopify.fabric)": fabricHandle,
   };
 }
 
-/** Additional image rows — same handle, only image columns populated. */
+/** Additional image rows — repeat Stan so metaobject validation passes on every line. */
 export function mapProductToImageRows(
   product: ProductListingData,
   handle: string,
+  stan: string,
 ): ShopifyCsvRow[] {
   const rows: ShopifyCsvRow[] = [];
   const images = product.images.filter((img) => img.url?.trim());
@@ -217,6 +242,7 @@ export function mapProductToImageRows(
       "Product image URL": img.url.trim(),
       "Image position": String(i + 1),
       "Image alt text": img.label?.trim() ?? "",
+      ...(stan ? { "Stan (product.metafields.custom.stan)": stan } : {}),
     });
   }
 

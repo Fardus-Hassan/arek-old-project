@@ -18,7 +18,7 @@ export function getProfileImageUrl(
   if (!trimmed || trimmed === "null") return undefined;
   if (trimmed.startsWith("http")) return trimmed;
   const base =
-    process.env.NEXT_PUBLIC_API_URL ?? "https://ajpropl-server.vercel.app/api/v1";
+    process.env.NEXT_PUBLIC_API_URL ?? "http://187.124.176.94:5555/api/v1";
   try {
     const origin = new URL(base).origin;
     return trimmed.startsWith("/")

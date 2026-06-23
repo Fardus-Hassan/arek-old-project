@@ -3,7 +3,10 @@ import {
   DEFAULT_INVENTORY_QTY,
   DEFAULT_SHOPIFY_PUBLISHED,
   DEFAULT_SHOPIFY_STATUS,
+  DEFAULT_STAN,
   DEFAULT_WEIGHT_GRAMS,
+  normalizeGoogleCondition,
+  normalizeStanValue,
 } from "@/lib/shopify-field-options";
 
 export interface ProductImage {
@@ -315,13 +318,16 @@ export function mapBatchItemToProductListingData(
       ? String(batch.selected_color)
       : colors[0] ?? "—";
 
-  const productCondition =
+  const rawProductCondition =
     detailsIn?.condition != null && String(detailsIn.condition).trim() !== ""
       ? String(detailsIn.condition)
       : batch.product_condition != null &&
           String(batch.product_condition).trim() !== ""
         ? String(batch.product_condition)
-        : "—";
+        : "";
+
+  const normalizedStan = normalizeStanValue(rawProductCondition);
+  const productCondition = normalizedStan || DEFAULT_STAN;
 
   const published =
     batch.shopify_published === false ? false : DEFAULT_SHOPIFY_PUBLISHED;
@@ -357,7 +363,7 @@ export function mapBatchItemToProductListingData(
     variants: {
       sizes: variant?.sizes?.length ? variant.sizes.map(String) : ["—"],
       colors: variant?.colors?.length ? variant.colors.map(String) : ["—"],
-      condition: String(variant?.condition ?? "—"),
+      condition: normalizeGoogleCondition(variant?.condition),
       feature: String(variant?.feature ?? "—"),
     },
     metafields: {

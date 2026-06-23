@@ -39,12 +39,14 @@ import { buildShopifyProductImportCsv } from "@/lib/csv/shopify-product-csv";
 import {
   DEFAULT_SHOPIFY_PUBLISHED,
   DEFAULT_SHOPIFY_STATUS,
+  COLOR_OPTIONS,
   FABRIC_OPTIONS,
   GENDER_OPTIONS,
   GOOGLE_CONDITION_OPTIONS,
   SIZE_OPTIONS,
   STAN_OPTIONS,
   STATUS_OPTIONS,
+  normalizeGoogleCondition,
 } from "@/lib/shopify-field-options";
 import {
   Select,
@@ -134,7 +136,7 @@ const FALLBACK_PRODUCT_DATA: ProductListingData = {
     published: DEFAULT_SHOPIFY_PUBLISHED,
     shopifyStatus: DEFAULT_SHOPIFY_STATUS,
     selectedSize: "M",
-    selectedColor: "Blue",
+    selectedColor: "Szary",
     weightGrams: "100",
     inventoryQty: "1",
 };
@@ -424,7 +426,7 @@ const AiResultContent: React.FC = () => {
       }
 
       const baseUrl =
-        process.env.NEXT_PUBLIC_API_URL ?? "https://ajpropl-server.vercel.app/api/v1";
+        process.env.NEXT_PUBLIC_API_URL ?? "http://187.124.176.94:5555/api/v1";
       const csv = buildActiveTabCsv();
       const file = new File([csv], `${safeCsvTitle()}.csv`, {
         type: "text/csv;charset=utf-8",
@@ -990,8 +992,8 @@ const AiResultContent: React.FC = () => {
                         </SelectTrigger>
                         <SelectContent>
                           {FABRIC_OPTIONS.map((f) => (
-                            <SelectItem key={f} value={f}>
-                              {f}
+                            <SelectItem key={f.handle} value={f.label}>
+                              {f.label}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -1087,35 +1089,39 @@ const AiResultContent: React.FC = () => {
                         <span className="text-gray-500 block mb-1 text-xs">
                           Color
                         </span>
-                        <input
-                          type="text"
-                          className={skuPriceInputClass}
+                        <Select
                           value={
                             productData.selectedColor === "—"
                               ? ""
                               : productData.selectedColor
                           }
-                          onChange={(e) => {
-                            const v = e.target.value.replace(/,/g, "");
+                          onValueChange={(v) =>
                             applyBatchUpdate(safeActiveTab, (b) => {
                               b.selected_color = v;
                               const vd = ensureNestedObject(b, "variant_data");
                               vd.colors = v ? [v] : [];
-                            });
-                          }}
-                          placeholder="Single color only"
-                        />
+                            })
+                          }>
+                          <SelectTrigger className={skuPriceInputClass}>
+                            <SelectValue placeholder="Select color" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {COLOR_OPTIONS.map((c) => (
+                              <SelectItem key={c.handle} value={c.label}>
+                                {c.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                       <div>
                         <span className="text-gray-500 block mb-1 text-xs">
                           Google Condition
                         </span>
                         <Select
-                          value={
-                            productData.variants.condition === "—"
-                              ? ""
-                              : productData.variants.condition.toLowerCase()
-                          }
+                          value={normalizeGoogleCondition(
+                            productData.variants.condition,
+                          )}
                           onValueChange={(v) =>
                             applyBatchUpdate(safeActiveTab, (b) => {
                               ensureNestedObject(b, "variant_data").condition =
