@@ -96,18 +96,36 @@ export const GENDER_OPTIONS = ["male", "female", "unisex"] as const;
 
 export const GOOGLE_CONDITION_OPTIONS = ["new", "used"] as const;
 
-export const DEFAULT_GOOGLE_CONDITION = "new" as const;
+export const DEFAULT_GOOGLE_CONDITION = "used" as const;
+
+function foldGoogleCondition(raw: string): string {
+  return raw
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+const GOOGLE_CONDITION_USED_ALIASES = new Set([
+  "used",
+  "uzywany",
+  "uzyte",
+  "secondhand",
+  "second hand",
+  "preowned",
+  "pre-owned",
+]);
 
 export function normalizeGoogleCondition(
   raw: string | undefined | null,
-): string {
-  const t = String(raw ?? "")
-    .trim()
-    .toLowerCase();
+): (typeof GOOGLE_CONDITION_OPTIONS)[number] {
+  const t = foldGoogleCondition(String(raw ?? ""));
   if (!t || t === "—") return DEFAULT_GOOGLE_CONDITION;
-  if (GOOGLE_CONDITION_OPTIONS.includes(t as (typeof GOOGLE_CONDITION_OPTIONS)[number])) {
-    return t;
-  }
+
+  if (t === "new") return "new";
+  if (t === "used" || GOOGLE_CONDITION_USED_ALIASES.has(t)) return "used";
+
+  // Polish/AI labels like "Nowy" are not valid Google values — use client default.
   return DEFAULT_GOOGLE_CONDITION;
 }
 

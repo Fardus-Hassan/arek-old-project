@@ -35,6 +35,7 @@ import {
   STAN_OPTIONS,
   STATUS_OPTIONS,
   displayFieldValue,
+  normalizeGoogleCondition,
 } from "@/lib/shopify-field-options";
 import { skuPriceInputClass } from "./product-listing-ui";
 
@@ -496,7 +497,9 @@ export function ProductListingPanel({
                       placeholder="new / used"
                       options={GOOGLE_CONDITION_OPTIONS}
                       allowCustom={false}
-                      value={displayFieldValue(productData.variants.condition)}
+                      value={normalizeGoogleCondition(
+                        productData.variants.condition,
+                      )}
                       onValueChange={(v) =>
                         applyBatchUpdate((b) => {
                           ensureNestedObject(b, "variant_data").condition = v;
@@ -542,7 +545,9 @@ export function ProductListingPanel({
                       Google Condition
                     </label>
                     <p className="text-xs sm:text-sm text-gray-900">
-                      {productData.variants.condition}
+                          {normalizeGoogleCondition(
+                            productData.variants.condition,
+                          )}
                     </p>
                   </div>
                   <div>

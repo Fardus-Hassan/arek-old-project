@@ -46,6 +46,7 @@ import {
   STAN_OPTIONS,
   STATUS_OPTIONS,
   displayFieldValue,
+  normalizeGoogleCondition,
 } from "@/lib/shopify-field-options";
 import { SearchableSelect } from "@/components/shared/SearchableSelect";
 import {
@@ -103,7 +104,7 @@ const FALLBACK_PRODUCT_DATA: ProductListingData = {
     variants: {
       sizes: ["S", "M", "L", "XL"],
       colors: ["Blue", "Pink"],
-      condition: "New",
+      condition: "used",
       feature: "Floral print",
     },
     metafields: {
@@ -1009,7 +1010,7 @@ const AiResultContent: React.FC = () => {
                           placeholder="new / used"
                           options={GOOGLE_CONDITION_OPTIONS}
                           allowCustom={false}
-                          value={displayFieldValue(
+                          value={normalizeGoogleCondition(
                             productData.variants.condition,
                           )}
                           onValueChange={(v) =>
@@ -1058,7 +1059,9 @@ const AiResultContent: React.FC = () => {
                           Google Condition
                         </label>
                         <p className="text-xs sm:text-sm text-gray-900">
-                          {productData.variants.condition}
+                          {normalizeGoogleCondition(
+                            productData.variants.condition,
+                          )}
                         </p>
                       </div>
                       <div>

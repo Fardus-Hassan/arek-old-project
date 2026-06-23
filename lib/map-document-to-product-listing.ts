@@ -7,6 +7,7 @@ import {
   DEFAULT_WEIGHT_GRAMS,
   DEFAULT_GOOGLE_CONDITION,
   normalizeStanValue,
+  normalizeGoogleCondition,
 } from "@/lib/shopify-field-options";
 
 export interface ProductImage {
@@ -351,12 +352,7 @@ export function mapBatchItemToProductListingData(
     variants: {
       sizes: variant?.sizes?.length ? variant.sizes.map(String) : ["—"],
       colors: variant?.colors?.length ? variant.colors.map(String) : ["—"],
-      condition:
-        variant?.condition != null &&
-        String(variant.condition).trim() !== "" &&
-        String(variant.condition).trim() !== "—"
-          ? String(variant.condition).trim()
-          : DEFAULT_GOOGLE_CONDITION,
+      condition: normalizeGoogleCondition(variant?.condition),
       feature: String(variant?.feature ?? "—"),
     },
     metafields: {
