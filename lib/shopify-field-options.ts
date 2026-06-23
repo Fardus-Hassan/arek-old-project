@@ -121,3 +121,13 @@ export const DEFAULT_SHOPIFY_PUBLISHED = true;
 export const DEFAULT_SHOPIFY_STATUS = "Active";
 export const DEFAULT_WEIGHT_GRAMS = "100";
 export const DEFAULT_INVENTORY_QTY = "1";
+
+/** Map placeholder sentinels to empty string for combobox display. */
+export function displayFieldValue(raw: string | undefined | null): string {
+  const t = String(raw ?? "").trim();
+  if (!t || t === "—") return "";
+  return t;
+}
+
+export const FABRIC_LABEL_OPTIONS = FABRIC_OPTIONS.map((f) => f.label);
+export const COLOR_LABEL_OPTIONS = COLOR_OPTIONS.map((c) => c.label);

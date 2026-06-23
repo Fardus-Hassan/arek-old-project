@@ -26,8 +26,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Eye, Loader2, Pencil, Search, Trash2, X } from "lucide-react";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Eye, Loader2, Pencil, Search, Trash2, X, Download } from "lucide-react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   useDeleteDocumentMutation,
   useGetDocumentsQuery,
@@ -39,6 +39,22 @@ import { getRtkQueryErrorMessage } from "@/lib/api/authApi";
 import type { SingleDocument } from "@/lib/api/documentApi";
 import type { ApiEnvelope } from "@/lib/api/types";
 import Image from "next/image";
+import {
+  isProductBatchRow,
+  ProductListingPanel,
+} from "@/components/features/product-listing/ProductListingPanel";
+import {
+  ensureShopifyExportFieldsOnPatch,
+  buildImageDetailsPatchPayload,
+} from "@/lib/document-api-helpers";
+import {
+  parsePriceForApi,
+  type ImageBatchRow,
+} from "@/lib/ai-result-document-helpers";
+import {
+  mapBatchItemToProductListingData,
+} from "@/lib/map-document-to-product-listing";
+import { downloadProductListingCsv } from "@/lib/download-product-csv";
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
@@ -545,6 +561,7 @@ const DocumentsPage = () => {
   > | null>(null);
   const [isDetailEditing, setIsDetailEditing] = useState(false);
   const [isSavingDetail, setIsSavingDetail] = useState(false);
+  const [selectedImage, setSelectedImage] = useState(0);
   const modalScrollRef = useRef<HTMLDivElement | null>(null);
 
   const { state: sidebarState } = useSidebar();
@@ -585,6 +602,7 @@ const DocumentsPage = () => {
     setDetailDraft(null);
     setDetailSnapshot(null);
     setIsDetailEditing(false);
+    setSelectedImage(0);
     const loadingId = toast.loading("Loading document...");
     try {
       const res = await getSingleDocument(id).unwrap();
@@ -658,9 +676,18 @@ const DocumentsPage = () => {
     }
     setIsSavingDetail(true);
     try {
+      const basePayload =
+        buildImageDetailsPatchPayload(detailDraft) ?? detailDraft;
+      const skuTrim = productSku.trim();
+      const priceForApi = parsePriceForApi(productPrice);
+      const imageDetailsPayload = ensureShopifyExportFieldsOnPatch({
+        ...basePayload,
+        ...(skuTrim ? { sku: skuTrim } : {}),
+        ...(priceForApi !== undefined ? { price: priceForApi } : {}),
+      });
       const res = await updateDocument({
         id: viewDocumentId,
-        body: { imageDetails: detailDraft },
+        body: { imageDetails: imageDetailsPayload },
       }).unwrap();
       toast.success(res.message || "Document updated successfully");
       const refreshed = await getSingleDocument(viewDocumentId).unwrap();
@@ -703,6 +730,52 @@ const DocumentsPage = () => {
 
   const displayImageDetails =
     (detailDraft ?? imageDetailsOnly) as Record<string, unknown> | null;
+
+  const isProductDetails = isProductBatchRow(displayImageDetails);
+
+  const productData = useMemo(() => {
+    if (!isProductDetails || !displayImageDetails) return null;
+    return mapBatchItemToProductListingData(
+      displayImageDetails,
+      responseForView?.data ?? null,
+    );
+  }, [displayImageDetails, isProductDetails, responseForView?.data]);
+
+  const productDimensions =
+    displayImageDetails?.dimensions &&
+    typeof displayImageDetails.dimensions === "object"
+      ? (displayImageDetails.dimensions as Record<string, unknown>)
+      : undefined;
+
+  const productSku =
+    detailDraft?.sku != null ? String(detailDraft.sku) : "";
+  const productPrice =
+    detailDraft?.price != null ? String(detailDraft.price) : "";
+
+  const applyProductBatchUpdate = useCallback(
+    (updater: (batch: ImageBatchRow) => void) => {
+      setDetailDraft((prev) => {
+        if (!prev) return prev;
+        const next = JSON.parse(JSON.stringify(prev)) as ImageBatchRow;
+        updater(next);
+        return next;
+      });
+    },
+    [],
+  );
+
+  const handleDownloadCsv = () => {
+    if (!productData) {
+      toast.error("No product data to export.");
+      return;
+    }
+    downloadProductListingCsv(productData, {
+      sku: productSku,
+      price: productPrice,
+      published: productData.published,
+      shopifyStatus: productData.shopifyStatus,
+    });
+  };
 
   return (
     <div className="w-full">
@@ -949,6 +1022,17 @@ const DocumentsPage = () => {
                 displayImageDetails &&
                 viewDocumentId && (
                   <div className="flex flex-wrap items-center gap-2 shrink-0">
+                    {isProductDetails && productData && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-9"
+                        onClick={handleDownloadCsv}>
+                        <Download className="h-4 w-4 mr-1.5" />
+                        Download CSV
+                      </Button>
+                    )}
                     {!isDetailEditing ? (
                       <Button
                         type="button"
@@ -995,6 +1079,8 @@ const DocumentsPage = () => {
             tabIndex={0}
             onWheelCapture={(e) => e.stopPropagation()}
             className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 sm:px-6 py-4 focus:outline-none"
+            data-lenis-prevent
+            onWheel={(e) => e.stopPropagation()}
           >
             {isViewing && (
               <div className="space-y-4">
@@ -1012,7 +1098,31 @@ const DocumentsPage = () => {
 
             {!isViewing && responseForView && (
               <div className="space-y-3">
-                {imageDetailsOnly && displayImageDetails ? (
+                {isProductDetails && productData && displayImageDetails ? (
+                  <ProductListingPanel
+                    compact
+                    productData={productData}
+                    isEditing={isDetailEditing}
+                    canEdit={Boolean(viewDocumentId)}
+                    dimensions={productDimensions}
+                    sku={productSku}
+                    price={productPrice}
+                    onSkuChange={(v) =>
+                      setDetailDraft((prev) =>
+                        prev ? { ...prev, sku: v } : prev,
+                      )
+                    }
+                    onPriceChange={(v) =>
+                      setDetailDraft((prev) =>
+                        prev ? { ...prev, price: v } : prev,
+                      )
+                    }
+                    onBatchUpdate={applyProductBatchUpdate}
+                    selectedImage={selectedImage}
+                    onSelectedImageChange={setSelectedImage}
+                    showActionButtons={false}
+                  />
+                ) : imageDetailsOnly && displayImageDetails ? (
                   <Section title="Image Details">
                     <RenderObject
                       value={displayImageDetails}

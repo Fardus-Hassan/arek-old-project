@@ -39,10 +39,8 @@ const sample = {
   tags: ["maxi dress", "geometric print"],
   sku: "",
   price: "",
-  careInstructions: "Machine wash cold.",
   keyFeatures: ["Flattering V-neck", "Soft breathable fabric"],
   selectedFeatures: [],
-  sizeGuide: "Fits true to size for US 8-12.",
   availableSizesFromDimensions: "M",
   dimensionConfidence: "—",
   hasRulerReference: "—",
@@ -88,5 +86,4 @@ console.log("Has Description:", headers.includes("Description"));
 console.log("Has Polish Rozmiar:", headers.some((h) => h.includes("rozmiar")));
 console.log("Old headers still present:", hasOld.length ? hasOld.join(", ") : "none");
 console.log("Template base columns missing:", missingFromTemplate.length ? missingFromTemplate.join(" | ") : "none");
-console.log("Description contains care:", csv.includes("Machine wash cold"));
-console.log("Description contains size guide:", csv.includes("Size guide"));
+console.log("Description contains features:", csv.includes("Flattering"));

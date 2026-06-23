@@ -39,15 +39,19 @@ import { buildShopifyProductImportCsv } from "@/lib/csv/shopify-product-csv";
 import {
   DEFAULT_SHOPIFY_PUBLISHED,
   DEFAULT_SHOPIFY_STATUS,
-  COLOR_OPTIONS,
-  FABRIC_OPTIONS,
-  GENDER_OPTIONS,
+  COLOR_LABEL_OPTIONS,
+  FABRIC_LABEL_OPTIONS,
   GOOGLE_CONDITION_OPTIONS,
   SIZE_OPTIONS,
   STAN_OPTIONS,
   STATUS_OPTIONS,
-  normalizeGoogleCondition,
+  displayFieldValue,
 } from "@/lib/shopify-field-options";
+import { SearchableSelect } from "@/components/shared/SearchableSelect";
+import {
+  GenderDisplayValue,
+  GenderRadioField,
+} from "@/components/shared/GenderRadioField";
 import {
   Select,
   SelectContent,
@@ -120,10 +124,8 @@ const FALLBACK_PRODUCT_DATA: ProductListingData = {
     tags: ["vintage", "cotton", "casual", "summer", "unisex"],
     sku: "",
     price: "",
-    careInstructions: "—",
     keyFeatures: [],
     selectedFeatures: [],
-    sizeGuide: "—",
     availableSizesFromDimensions: "—",
     dimensionConfidence: "—",
     hasRulerReference: "—",
@@ -572,7 +574,6 @@ const AiResultContent: React.FC = () => {
                       alt={image.label}
                       className="object-cover"
                       fill
-                      
                       sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                       priority={index === 0}
                       unoptimized={
@@ -706,26 +707,6 @@ const AiResultContent: React.FC = () => {
                 )}
 
                 {((isEditing && canEdit) ||
-                  productData.careInstructions !== "—") && (
-                  <EditableTextBlock
-                    label="Care instructions"
-                    editing={isEditing}
-                    multiline
-                    rows={3}
-                    value={
-                      productData.careInstructions === "—"
-                        ? ""
-                        : productData.careInstructions
-                    }
-                    onChange={(v) =>
-                      applyBatchUpdate(safeActiveTab, (b) => {
-                        b.care_instructions = v;
-                      })
-                    }
-                  />
-                )}
-
-                {((isEditing && canEdit) ||
                   productData.keyFeatures.length > 0) &&
                   (isEditing ? (
                     <EditableTextBlock
@@ -769,7 +750,6 @@ const AiResultContent: React.FC = () => {
 
             {/* Sizing & measurement */}
             {((isEditing && canEdit) ||
-              productData.sizeGuide !== "—" ||
               productData.selectedSize !== "—") && (
               <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6">
                 <h3 className="text-xs sm:text-sm font-semibold text-gray-900 mb-3 sm:mb-4">
@@ -779,14 +759,15 @@ const AiResultContent: React.FC = () => {
                   <div>
                     <span className="text-gray-500 block mb-1">Size</span>
                     {isEditing && canEdit ? (
-                      <Select
-                        value={
+                      <SearchableSelect
+                        className={skuPriceInputClass}
+                        placeholder="Select size"
+                        options={SIZE_OPTIONS}
+                        value={displayFieldValue(
                           dimensions?.selected_size != null
                             ? String(dimensions.selected_size)
-                            : productData.selectedSize === "—"
-                              ? ""
-                              : productData.selectedSize
-                        }
+                            : productData.selectedSize,
+                        )}
                         onValueChange={(v) =>
                           applyBatchUpdate(safeActiveTab, (b) => {
                             const d = ensureNestedObject(b, "dimensions");
@@ -795,47 +776,11 @@ const AiResultContent: React.FC = () => {
                             const vd = ensureNestedObject(b, "variant_data");
                             vd.sizes = [v];
                           })
-                        }>
-                        <SelectTrigger className={skuPriceInputClass}>
-                          <SelectValue placeholder="Select size" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {SIZE_OPTIONS.map((s) => (
-                            <SelectItem key={s} value={s}>
-                              {s}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      <p className="text-gray-900 mt-0.5">
-                        {productData.selectedSize}
-                      </p>
-                    )}
-                  </div>
-                  <div className="sm:col-span-2">
-                    <span className="text-gray-500 block mb-1">Size guide</span>
-                    {isEditing && canEdit ? (
-                      <textarea
-                        rows={3}
-                        className={skuPriceInputClass}
-                        value={
-                          dimensions?.size_guide != null
-                            ? String(dimensions.size_guide)
-                            : productData.sizeGuide === "—"
-                              ? ""
-                              : productData.sizeGuide
-                        }
-                        onChange={(e) =>
-                          applyBatchUpdate(safeActiveTab, (b) => {
-                            const d = ensureNestedObject(b, "dimensions");
-                            d.size_guide = e.target.value;
-                          })
                         }
                       />
                     ) : (
-                      <p className="text-gray-900 mt-0.5 leading-relaxed">
-                        {productData.sizeGuide}
+                      <p className="text-gray-900 mt-0.5">
+                        {productData.selectedSize}
                       </p>
                     )}
                   </div>
@@ -884,30 +829,19 @@ const AiResultContent: React.FC = () => {
                       Condition (Stan)
                     </span>
                     {isEditing && canEdit ? (
-                      <Select
-                        value={
-                          productData.productCondition === "—"
-                            ? ""
-                            : productData.productCondition
-                        }
+                      <SearchableSelect
+                        className={skuPriceInputClass}
+                        placeholder="Select condition"
+                        options={STAN_OPTIONS}
+                        value={displayFieldValue(productData.productCondition)}
                         onValueChange={(v) =>
                           applyBatchUpdate(safeActiveTab, (b) => {
                             b.product_condition = v;
                             ensureNestedObject(b, "product_details").condition =
                               v;
                           })
-                        }>
-                        <SelectTrigger className={skuPriceInputClass}>
-                          <SelectValue placeholder="Select condition" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {STAN_OPTIONS.map((s) => (
-                            <SelectItem key={s} value={s}>
-                              {s}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        }
+                      />
                     ) : (
                       <p className="text-xs sm:text-sm text-gray-900">
                         {productData.productCondition}
@@ -919,32 +853,17 @@ const AiResultContent: React.FC = () => {
                       Gender
                     </span>
                     {isEditing && canEdit ? (
-                      <Select
-                        value={
-                          productData.details.gender === "—"
-                            ? ""
-                            : productData.details.gender.toLowerCase()
-                        }
-                        onValueChange={(v) =>
+                      <GenderRadioField
+                        name="ai-result-gender"
+                        value={productData.details.gender}
+                        onChange={(v) =>
                           applyBatchUpdate(safeActiveTab, (b) => {
                             ensureNestedObject(b, "product_details").gender = v;
                           })
-                        }>
-                        <SelectTrigger className={skuPriceInputClass}>
-                          <SelectValue placeholder="Select gender" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {GENDER_OPTIONS.map((g) => (
-                            <SelectItem key={g} value={g}>
-                              {g}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        }
+                      />
                     ) : (
-                      <p className="text-xs sm:text-sm text-gray-900">
-                        {productData.details.gender}
-                      </p>
+                      <GenderDisplayValue value={productData.details.gender} />
                     )}
                   </div>
                 </div>
@@ -975,29 +894,18 @@ const AiResultContent: React.FC = () => {
                       Fabric
                     </span>
                     {isEditing && canEdit ? (
-                      <Select
-                        value={
-                          productData.metafields.fabric === "—"
-                            ? ""
-                            : productData.metafields.fabric
-                        }
+                      <SearchableSelect
+                        className={skuPriceInputClass}
+                        placeholder="Select fabric"
+                        options={FABRIC_LABEL_OPTIONS}
+                        value={displayFieldValue(productData.metafields.fabric)}
                         onValueChange={(v) =>
                           applyBatchUpdate(safeActiveTab, (b) => {
                             b.fabric = v;
                             ensureNestedObject(b, "listing").fabric = v;
                           })
-                        }>
-                        <SelectTrigger className={skuPriceInputClass}>
-                          <SelectValue placeholder="Select fabric" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {FABRIC_OPTIONS.map((f) => (
-                            <SelectItem key={f.handle} value={f.label}>
-                              {f.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        }
+                      />
                     ) : (
                       <p className="text-xs sm:text-sm text-gray-900">
                         {productData.metafields.fabric}
@@ -1058,12 +966,11 @@ const AiResultContent: React.FC = () => {
                         <span className="text-gray-500 block mb-1 text-xs">
                           Size
                         </span>
-                        <Select
-                          value={
-                            productData.selectedSize === "—"
-                              ? ""
-                              : productData.selectedSize
-                          }
+                        <SearchableSelect
+                          className={skuPriceInputClass}
+                          placeholder="Select size"
+                          options={SIZE_OPTIONS}
+                          value={displayFieldValue(productData.selectedSize)}
                           onValueChange={(v) =>
                             applyBatchUpdate(safeActiveTab, (b) => {
                               const d = ensureNestedObject(b, "dimensions");
@@ -1072,54 +979,37 @@ const AiResultContent: React.FC = () => {
                               const vd = ensureNestedObject(b, "variant_data");
                               vd.sizes = [v];
                             })
-                          }>
-                          <SelectTrigger className={skuPriceInputClass}>
-                            <SelectValue placeholder="Select size" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {SIZE_OPTIONS.map((s) => (
-                              <SelectItem key={s} value={s}>
-                                {s}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                          }
+                        />
                       </div>
                       <div>
                         <span className="text-gray-500 block mb-1 text-xs">
                           Color
                         </span>
-                        <Select
-                          value={
-                            productData.selectedColor === "—"
-                              ? ""
-                              : productData.selectedColor
-                          }
+                        <SearchableSelect
+                          className={skuPriceInputClass}
+                          placeholder="Select color"
+                          options={COLOR_LABEL_OPTIONS}
+                          value={displayFieldValue(productData.selectedColor)}
                           onValueChange={(v) =>
                             applyBatchUpdate(safeActiveTab, (b) => {
                               b.selected_color = v;
                               const vd = ensureNestedObject(b, "variant_data");
                               vd.colors = v ? [v] : [];
                             })
-                          }>
-                          <SelectTrigger className={skuPriceInputClass}>
-                            <SelectValue placeholder="Select color" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {COLOR_OPTIONS.map((c) => (
-                              <SelectItem key={c.handle} value={c.label}>
-                                {c.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                          }
+                        />
                       </div>
                       <div>
                         <span className="text-gray-500 block mb-1 text-xs">
                           Google Condition
                         </span>
-                        <Select
-                          value={normalizeGoogleCondition(
+                        <SearchableSelect
+                          className={skuPriceInputClass}
+                          placeholder="new / used"
+                          options={GOOGLE_CONDITION_OPTIONS}
+                          allowCustom={false}
+                          value={displayFieldValue(
                             productData.variants.condition,
                           )}
                           onValueChange={(v) =>
@@ -1127,18 +1017,8 @@ const AiResultContent: React.FC = () => {
                               ensureNestedObject(b, "variant_data").condition =
                                 v;
                             })
-                          }>
-                          <SelectTrigger className={skuPriceInputClass}>
-                            <SelectValue placeholder="new / used" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {GOOGLE_CONDITION_OPTIONS.map((c) => (
-                              <SelectItem key={c} value={c}>
-                                {c}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                          }
+                        />
                       </div>
                       <EditableInlineField
                         label="Feature (Wzór)"

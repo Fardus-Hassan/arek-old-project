@@ -5,7 +5,7 @@ import {
   DEFAULT_SHOPIFY_STATUS,
   DEFAULT_STAN,
   DEFAULT_WEIGHT_GRAMS,
-  normalizeGoogleCondition,
+  DEFAULT_GOOGLE_CONDITION,
   normalizeStanValue,
 } from "@/lib/shopify-field-options";
 
@@ -60,11 +60,8 @@ export interface ProductListingData {
   tags: string[];
   sku: string;
   price: string;
-  /** Batch row */
-  careInstructions: string;
   keyFeatures: string[];
   selectedFeatures: string[];
-  sizeGuide: string;
   availableSizesFromDimensions: string;
   dimensionConfidence: string;
   hasRulerReference: string;
@@ -253,11 +250,6 @@ export function mapBatchItemToProductListingData(
   const hasRulerReference =
     ruler === true ? "Yes" : ruler === false ? "No" : "—";
 
-  const sizeGuide =
-    d?.size_guide != null && String(d.size_guide).trim() !== ""
-      ? String(d.size_guide)
-      : "—";
-
   const images: ProductImage[] = [];
   pushImagesFromBatch(batch, images);
 
@@ -289,10 +281,6 @@ export function mapBatchItemToProductListingData(
   const selectedFeatures = Array.isArray(batch.selected_features)
     ? (batch.selected_features as unknown[]).map(String).filter(Boolean)
     : [];
-
-  const careInstructions = isNonEmptyString(batch.care_instructions)
-    ? batch.care_instructions
-    : "—";
 
   const batchItemStatus = isNonEmptyString(batch.status)
     ? batch.status
@@ -363,7 +351,12 @@ export function mapBatchItemToProductListingData(
     variants: {
       sizes: variant?.sizes?.length ? variant.sizes.map(String) : ["—"],
       colors: variant?.colors?.length ? variant.colors.map(String) : ["—"],
-      condition: normalizeGoogleCondition(variant?.condition),
+      condition:
+        variant?.condition != null &&
+        String(variant.condition).trim() !== "" &&
+        String(variant.condition).trim() !== "—"
+          ? String(variant.condition).trim()
+          : DEFAULT_GOOGLE_CONDITION,
       feature: String(variant?.feature ?? "—"),
     },
     metafields: {
@@ -386,10 +379,8 @@ export function mapBatchItemToProductListingData(
     tags,
     sku: "",
     price: "",
-    careInstructions,
     keyFeatures,
     selectedFeatures,
-    sizeGuide,
     availableSizesFromDimensions,
     dimensionConfidence,
     hasRulerReference,

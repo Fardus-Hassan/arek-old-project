@@ -30,7 +30,7 @@ function looksLikeHtml(s: string): boolean {
   return /<[a-z][\s\S]*>/i.test(s);
 }
 
-/** Combine description, key features, care instructions, and size guide into one HTML block. */
+/** Combine description and key features into one HTML block. */
 export function buildDescriptionHtml(product: ProductListingData): string {
   const parts: string[] = [];
 
@@ -44,18 +44,6 @@ export function buildDescriptionHtml(product: ProductListingData): string {
       .map((f) => `<li>${escapeHtmlText(f)}</li>`)
       .join("");
     parts.push(`<ul>${items}</ul>`);
-  }
-
-  if (!isPlaceholder(product.careInstructions)) {
-    parts.push(
-      `<p><strong>Care:</strong> ${escapeHtmlText(product.careInstructions.trim())}</p>`,
-    );
-  }
-
-  if (!isPlaceholder(product.sizeGuide)) {
-    parts.push(
-      `<p><strong>Size guide:</strong> ${escapeHtmlText(product.sizeGuide.trim())}</p>`,
-    );
   }
 
   return parts.join("\n").trim();
