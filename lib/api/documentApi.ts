@@ -73,11 +73,14 @@ export const documentApi = createApi({
     }),
     createDocument: builder.mutation<
       ApiEnvelope<CreateDocumentResponseData>,
-      { images: File[]; bodyData: string }
+      { images: File[]; backpartImages: File[]; bodyData: string }
     >({
-      query: ({ images, bodyData }) => {
+      query: ({ images, backpartImages, bodyData }) => {
         const formData = new FormData();
         images.forEach((image) => formData.append("images", image));
+        backpartImages.forEach((image) =>
+          formData.append("backpart_images", image),
+        );
         formData.append("bodyData", bodyData);
         return { url: "/documents", method: "POST", body: formData };
       },

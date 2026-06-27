@@ -126,12 +126,12 @@ function pushImagesFromBatch(
     });
   };
 
-  add(batch.original_url, "Original");
   add(
     batch.background_removed_url,
     "Background removed",
     "background_removal",
   );
+  add(batch.backpart_image, "Back");
 
   const tryOn = batch.virtual_tryon_urls as string[] | undefined;
   tryOn?.forEach((url, i) => {

@@ -1,5 +1,5 @@
-import GeneratePage from "@/components/pages/GeneratePage";
+import { redirect } from "next/navigation";
 
 export default function page() {
-  return <GeneratePage />;
+  redirect("/");
 }

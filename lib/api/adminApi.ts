@@ -4,7 +4,7 @@ import type { ApiEnvelope } from "./types";
 
 
 
-//https://api.aisizepro.com/api/v1
+//http://187.124.176.94:5555/api/v2
 
 const baseUrl =
   process.env.NEXT_PUBLIC_API_URL ?? "https://api.aisizepro.com/api/v1";

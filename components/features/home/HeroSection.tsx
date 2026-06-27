@@ -1,18 +1,8 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
-import { useDropzone } from "react-dropzone";
-import {
-  Maximize,
-  Image as ImageIcon,
-  UserCircle2,
-  Eraser,
-  Users,
-  Ruler,
-  X,
-} from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
-import Image from "next/image";
+import React, { useEffect, useRef, useState } from "react";
+import { Plus } from "lucide-react";
+import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useCreateDocumentMutation } from "@/lib/api/documentApi";
@@ -23,131 +13,212 @@ import {
 } from "@/lib/generated-document-storage";
 import { normalizeDocumentApiData } from "@/lib/document-api-helpers";
 import { mapGarmentOptionToApi } from "@/lib/garment-feature-map";
+import { ImageGroupCard } from "./ImageGroupCard";
+import { BulkUploadSection } from "./BulkUploadSection";
+import { StickyFeatureBar } from "./StickyFeatureBar";
+import {
+  createEmptyGroup,
+  type GroupSlot,
+  type ImageGroup,
+} from "./image-group-types";
+import {
+  sortFilesByName,
+  spillFilesIntoGroups,
+} from "./bulk-group-upload";
 
-const options = [
-  { id: "dimensions", label: "Physical Dimensions", icon: Maximize },
-  { id: "try-on", label: "AI virtual try-on", icon: ImageIcon },
-  { id: "mannequin", label: "Mannequin", icon: UserCircle2 },
-  { id: "removal", label: "Background removal", icon: Eraser },
-  { id: "model", label: "Model", icon: Users },
-  { id: "diagram", label: "Image diagram", icon: Ruler },
-];
+function revokeGroupPreviews(group: ImageGroup) {
+  if (group.frontPreview) URL.revokeObjectURL(group.frontPreview);
+  if (group.backPreview) URL.revokeObjectURL(group.backPreview);
+}
 
-type UploadItem = {
-  id: string;
-  file: File;
-  previewUrl: string;
-  selectedOptions: string[];
-};
-
-const newItemId = () =>
-  `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+function isGroupComplete(group: ImageGroup): boolean {
+  return Boolean(group.front && group.back);
+}
 
 const HeroSection = () => {
-  const [items, setItems] = useState<UploadItem[]>([]);
-  const [activeIndex, setActiveIndex] = useState(0);
+  const [groups, setGroups] = useState<ImageGroup[]>([createEmptyGroup()]);
+  const [activeGroupIndex, setActiveGroupIndex] = useState(0);
   const [language, setLanguage] = useState<"English" | "Polish">("English");
   const router = useRouter();
   const [createDocument, { isLoading: isGenerating }] =
     useCreateDocumentMutation();
 
-  const itemsRef = React.useRef(items);
-  itemsRef.current = items;
+  const groupsRef = useRef(groups);
+  groupsRef.current = groups;
+  const groupCardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+
   useEffect(() => {
     return () => {
-      itemsRef.current.forEach((i) => URL.revokeObjectURL(i.previewUrl));
+      groupsRef.current.forEach(revokeGroupPreviews);
     };
   }, []);
 
   useEffect(() => {
-    if (items.length === 0) {
-      setActiveIndex(0);
+    if (groups.length === 0) {
+      setActiveGroupIndex(0);
       return;
     }
-    setActiveIndex((i) => Math.min(i, items.length - 1));
-  }, [items.length]);
+    setActiveGroupIndex((i) => Math.min(i, groups.length - 1));
+  }, [groups.length]);
 
-  const onDrop = useCallback((acceptedFiles: File[]) => {
-    if (acceptedFiles.length === 0) return;
-    setItems((prev) => [
-      ...prev,
-      ...acceptedFiles.map((file) => ({
-        id: newItemId(),
-        file,
-        previewUrl: URL.createObjectURL(file),
-        selectedOptions: [] as string[],
-      })),
-    ]);
-  }, []);
-
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept: { "image/*": [".jpeg", ".png", ".jpg", ".webp"] },
-    multiple: true,
-    noClick: items.length > 0,
-  });
-
-  const openFilePicker = () => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = "image/jpeg,image/png,image/jpg,image/webp";
-    input.multiple = true;
-    input.onchange = (e) => {
-      const list = (e.target as HTMLInputElement).files;
-      if (list?.length) onDrop(Array.from(list));
-    };
-    input.click();
+  const updateGroup = (
+    groupId: string,
+    updater: (group: ImageGroup) => ImageGroup,
+  ) => {
+    setGroups((prev) =>
+      prev.map((g) => (g.id === groupId ? updater(g) : g)),
+    );
   };
 
-  const removeItem = (id: string) => {
-    setItems((prev) => {
-      const found = prev.find((x) => x.id === id);
-      if (found) URL.revokeObjectURL(found.previewUrl);
-      return prev.filter((x) => x.id !== id);
+  const handleSlotFile = (groupId: string, slot: GroupSlot, file: File) => {
+    updateGroup(groupId, (group) => {
+      const previewKey = slot === "front" ? "frontPreview" : "backPreview";
+      const fileKey = slot === "front" ? "front" : "back";
+      const oldPreview = group[previewKey];
+      if (oldPreview) URL.revokeObjectURL(oldPreview);
+      return {
+        ...group,
+        [fileKey]: file,
+        [previewKey]: URL.createObjectURL(file),
+      };
+    });
+  };
+
+  const handleClearSlot = (groupId: string, slot: GroupSlot) => {
+    updateGroup(groupId, (group) => {
+      const previewKey = slot === "front" ? "frontPreview" : "backPreview";
+      const fileKey = slot === "front" ? "front" : "back";
+      const oldPreview = group[previewKey];
+      if (oldPreview) URL.revokeObjectURL(oldPreview);
+      return {
+        ...group,
+        [fileKey]: null,
+        [previewKey]: null,
+      };
+    });
+  };
+
+  const handleSwapSlots = (groupId: string) => {
+    updateGroup(groupId, (group) => ({
+      ...group,
+      front: group.back,
+      back: group.front,
+      frontPreview: group.backPreview,
+      backPreview: group.frontPreview,
+    }));
+  };
+
+  const handleSlotFiles = (
+    groupId: string,
+    slot: GroupSlot,
+    files: File[],
+  ) => {
+    if (files.length === 0) return;
+    if (files.length === 1) {
+      handleSlotFile(groupId, slot, files[0]!);
+      return;
+    }
+    const groupIndex = groups.findIndex((g) => g.id === groupId);
+    if (groupIndex < 0) return;
+    setGroups((prev) =>
+      spillFilesIntoGroups(prev, groupIndex, slot, sortFilesByName(files)),
+    );
+  };
+
+  const applyBulkGroups = (newGroups: ImageGroup[]) => {
+    if (newGroups.length === 0) return;
+    const existingCount = groups.filter((g) => g.front || g.back).length;
+    setGroups((prev) => {
+      prev
+        .filter((g) => !g.front && !g.back)
+        .forEach(revokeGroupPreviews);
+      const existing = prev.filter((g) => g.front || g.back);
+      return [...existing, ...newGroups];
+    });
+    setActiveGroupIndex(existingCount);
+  };
+
+  const handleAddGroup = () => {
+    setGroups((prev) => [...prev, createEmptyGroup()]);
+    setActiveGroupIndex(groups.length);
+  };
+
+  const handleDeleteGroup = (groupId: string, index: number) => {
+    setGroups((prev) => {
+      const found = prev.find((g) => g.id === groupId);
+      if (found) revokeGroupPreviews(found);
+      return prev.filter((g) => g.id !== groupId);
+    });
+    if (activeGroupIndex >= index && activeGroupIndex > 0) {
+      setActiveGroupIndex((i) => i - 1);
+    }
+  };
+
+  const handleActiveGroupChange = (index: number) => {
+    setActiveGroupIndex(index);
+    const group = groups[index];
+    if (!group) return;
+    requestAnimationFrame(() => {
+      groupCardRefs.current
+        .get(group.id)
+        ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     });
   };
 
   const toggleOption = (id: string) => {
-    setItems((prev) =>
-      prev.map((item, idx) =>
-        idx === activeIndex
-          ? {
-              ...item,
-              selectedOptions: item.selectedOptions.includes(id)
-                ? item.selectedOptions.filter((x) => x !== id)
-                : [...item.selectedOptions, id],
-            }
-          : item,
-      ),
-    );
+    const activeGroup = groups[activeGroupIndex];
+    if (!activeGroup) return;
+    updateGroup(activeGroup.id, (group) => ({
+      ...group,
+      selectedOptions: group.selectedOptions.includes(id)
+        ? group.selectedOptions.filter((x) => x !== id)
+        : [...group.selectedOptions, id],
+    }));
   };
 
   const handleReset = () => {
-    items.forEach((i) => URL.revokeObjectURL(i.previewUrl));
-    setItems([]);
-    setActiveIndex(0);
+    groups.forEach(revokeGroupPreviews);
+    setGroups([createEmptyGroup()]);
+    setActiveGroupIndex(0);
     setLanguage("English");
   };
 
   const handleGenerate = async () => {
-    if (items.length === 0) return;
-    // Immediately move to analyzing UI, and avoid redirecting from stale stored data.
+    if (groups.length === 0) {
+      toast.error("Add at least one group with Front and Back images.");
+      return;
+    }
+
+    const allComplete = groups.every(isGroupComplete);
+    if (!allComplete) {
+      toast.error(
+        "Each group must include both a Front and a Back image.",
+      );
+      return;
+    }
+
     clearGeneratedDocument();
     sessionStorage.setItem("generationStartedAt", new Date().toISOString());
     router.push("/analyzing");
 
-    const images = items.map((i) => i.file);
+    const images = groups.map((g) => g.front!);
+    const backpartImages = groups.map((g) => g.back!);
     const bodyData = JSON.stringify({
-      features: items.map((i) => ({
+      features: groups.map((g) => ({
         features:
-          i.selectedOptions.length > 0
-            ? i.selectedOptions.map(mapGarmentOptionToApi)
+          g.selectedOptions.length > 0
+            ? g.selectedOptions.map(mapGarmentOptionToApi)
             : ["model"],
       })),
       language,
     });
+
     try {
-      const res = await createDocument({ images, bodyData }).unwrap();
+      const res = await createDocument({
+        images,
+        backpartImages,
+        bodyData,
+      }).unwrap();
       const { document, generatedImageIds } = normalizeDocumentApiData(
         res.data,
       );
@@ -155,18 +226,18 @@ const HeroSection = () => {
       sessionStorage.setItem("generatedDocumentId", document.id);
       sessionStorage.removeItem("generationStartedAt");
       toast.success(res.message || "Generation started");
-      // /analyzing will detect the saved payload and redirect to /ai-result
     } catch (error) {
       toast.error(getRtkQueryErrorMessage(error));
       router.push("/");
     }
   };
 
-  const active = items[activeIndex];
-  const activeSelected = active?.selectedOptions ?? [];
+  const activeGroup = groups[activeGroupIndex];
+  const activeSelected = activeGroup?.selectedOptions ?? [];
+  const canGenerate = groups.length > 0 && groups.every(isGroupComplete);
 
   return (
-    <section className="py-10 lg:py-20 px-4 sm:px-6 bg-[#f7f9fa]">
+    <section className="py-10 lg:py-20 px-4 sm:px-6 bg-[#f7f9fa] pb-44 sm:pb-36">
       <div className="max-w-7xl mx-auto flex flex-col items-center">
         <div className="text-center max-w-7xl mb-8 md:mb-12">
           <motion.h1
@@ -180,8 +251,8 @@ const HeroSection = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
             className="text-xs sm:text-sm md:text-base lg:text-lg font-medium text-slate-500 max-w-2xl mx-auto px-2">
-            Add one or more images. Pick an image below to set its features,
-            then generate — no extra page.
+            Add images in groups (e.g., Front, Back). Upload many groups at
+            once using bulk upload, or add images per group below.
           </motion.p>
         </div>
 
@@ -189,185 +260,48 @@ const HeroSection = () => {
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: 0.2 }}
-          className="w-full max-w-3xl mb-4">
-          <div
-            {...getRootProps()}
-            className={`relative min-h-[200px] sm:min-h-[240px] rounded-3xl border-4 border-dashed transition-all duration-500 flex flex-col items-center justify-center p-6 sm:p-8 text-center overflow-hidden
-              ${isDragActive ? "border-[#E5BEEE] bg-[#F9F1FB]" : "border-purple-100 hover:border-purple-200 bg-white shadow-sm"}
-              ${items.length === 0 ? "cursor-pointer" : ""}
-            `}>
-            <div className="absolute inset-0 opacity-0 hover:opacity-10 bg-gradient-to-tr from-[#AD34DD] to-transparent transition-opacity duration-700 pointer-events-none" />
-            <input {...getInputProps()} />
+          className="w-full max-w-3xl mb-6 space-y-4">
+          <BulkUploadSection onApply={applyBulkGroups} />
 
-            <AnimatePresence mode="wait">
-              {items.length === 0 ? (
-                <motion.div
-                  key="prompt"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="flex flex-col items-center">
-                  <div className="flex items-center justify-center mb-4 md:mb-6">
-                    <Image
-                      src="/images/heroImageIcon.svg"
-                      alt="Upload icon"
-                      width={40}
-                      height={40}
-                      className="w-8 h-8 md:w-10 md:h-10"
-                      priority
-                    />
-                  </div>
-                  <p className="text-slate-900 font-bold text-sm sm:text-base md:text-lg mb-2 px-4">
-                    Drop images here or click to browse
-                  </p>
-                  <p className="text-slate-400 font-medium text-xs sm:text-sm">
-                    JPG, PNG or WebP — multiple files allowed
-                  </p>
-                </motion.div>
-              ) : (
-                <motion.div
-                  key="has-files"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="w-full space-y-4">
-                  <p className="text-slate-600 text-sm font-medium">
-                    {items.length} image{items.length !== 1 ? "s" : ""} added.
-                    Drag more files here or use{" "}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openFilePicker();
-                      }}
-                      className="text-[#A825C7] font-semibold underline underline-offset-2">
-                      Add more
-                    </button>
-                  </p>
-                  <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1 snap-x snap-mandatory scrollbar-thin">
-                    {items.map((item, idx) => (
-                      <div
-                        key={item.id}
-                        className={`relative shrink-0 snap-start rounded-2xl border-2 overflow-hidden w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 ${
-                          idx === activeIndex
-                            ? "border-[#A825C7] ring-2 ring-[#A825C7]/30"
-                            : "border-gray-200"
-                        }`}>
-                        <button
-                          type="button"
-                          onClick={() => setActiveIndex(idx)}
-                          className="absolute inset-0 z-0"
-                          aria-label={`Select image ${idx + 1}`}
-                        />
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={item.previewUrl}
-                          alt=""
-                          className="w-full h-full object-cover pointer-events-none"
-                        />
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            removeItem(item.id);
-                          }}
-                          className="absolute top-1 right-1 z-10 rounded-full bg-black/60 text-white p-1 hover:bg-black/80"
-                          aria-label="Remove image">
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                        <span className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[10px] sm:text-xs py-0.5 text-center pointer-events-none">
-                          {idx + 1}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                  {active && (
-                    <p className="text-left text-xs sm:text-sm text-slate-500 truncate">
-                      Editing features for:{" "}
-                      <span className="font-medium text-slate-800">
-                        {active.file.name}
-                      </span>
-                    </p>
-                  )}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+          {groups.map((group, index) => (
+            <div
+              key={group.id}
+              ref={(el) => {
+                if (el) groupCardRefs.current.set(group.id, el);
+                else groupCardRefs.current.delete(group.id);
+              }}>
+              <ImageGroupCard
+                group={group}
+                index={index}
+                isActive={index === activeGroupIndex}
+                canDelete={groups.length > 1}
+                onSelect={() => handleActiveGroupChange(index)}
+                onDelete={() => handleDeleteGroup(group.id, index)}
+                onSlotFile={(slot, file) => handleSlotFile(group.id, slot, file)}
+                onSlotFiles={(slot, files) =>
+                  handleSlotFiles(group.id, slot, files)
+                }
+                onClearSlot={(slot) => handleClearSlot(group.id, slot)}
+                onSwapSlots={() => handleSwapSlots(group.id)}
+              />
+            </div>
+          ))}
+
+          <button
+            type="button"
+            onClick={handleAddGroup}
+            className="w-full min-h-[56px] rounded-2xl border-2 border-dashed border-purple-200 bg-white hover:border-[#A825C7] hover:bg-[#F9F1FB] transition-all flex items-center justify-center gap-2 text-sm font-bold text-slate-700">
+            <Plus className="w-4 h-4 text-[#A825C7]" />
+            Add another group
+          </button>
         </motion.div>
 
         <p className="text-slate-400 text-xs sm:text-sm mb-6 md:mb-10 font-medium text-center max-w-xl">
-          Select a thumbnail, then toggle AI features for that image only. Each
-          image can use different options.
+          Use the feature bar at the bottom to pick AI options per group. Drag a
+          Front or Back image onto the other slot to swap them.
         </p>
 
-        <div className="w-full max-w-5xl mb-4 flex items-center justify-between gap-3">
-          <p className="text-xs sm:text-sm font-semibold text-slate-700">
-            Output language
-          </p>
-          <select
-            value={language}
-            onChange={(e) => setLanguage(e.target.value as "English" | "Polish")}
-            className="h-9 px-3 rounded-lg border border-slate-200 bg-white text-xs sm:text-sm text-slate-700 font-semibold focus:outline-none focus:ring-2 focus:ring-purple-300"
-          >
-            <option value="English">English</option>
-            <option value="Polish">Polish</option>
-          </select>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-4 lg:gap-6 w-full max-w-5xl mb-10 sm:mb-12">
-          {options.map((option, index) => {
-            const Icon = option.icon;
-            const isSelected = activeSelected.includes(option.id);
-            const disabled = items.length === 0;
-
-            return (
-              <motion.button
-                key={option.id}
-                type="button"
-                disabled={disabled}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                whileHover={
-                  disabled
-                    ? {}
-                    : {
-                        y: -5,
-                        boxShadow: "0 10px 15px -3px rgb(168 37 199 / 0.1)",
-                        borderColor: "rgba(168, 37, 199, 0.5)",
-                      }
-                }
-                whileTap={disabled ? {} : { scale: 0.96 }}
-                transition={{
-                  delay: 0.15 + index * 0.04,
-                  y: { duration: 0.2 },
-                }}
-                onClick={() => toggleOption(option.id)}
-                className={`flex flex-col items-center justify-center p-3 md:p-6 rounded-xl md:rounded-2xl border-2 transition-all duration-300 bg-white
-                        ${disabled ? "opacity-40 cursor-not-allowed" : ""}
-                        ${isSelected ? "border-[#A825C7]!" : "border-[#E5BEEE]"}
-                      `}>
-                <div
-                  className={`w-8 h-8 md:w-10 md:h-10 rounded-lg flex items-center justify-center mb-2 md:mb-4 transition-colors
-                          ${isSelected ? "bg-[#F9F1FB]" : "bg-slate-100"}
-                        `}>
-                  <Icon
-                    size={18}
-                    className={`${
-                      isSelected ? "text-[#A825C7]" : "text-slate-400"
-                    } md:w-[20px] md:h-[20px]`}
-                  />
-                </div>
-                <span
-                  className={`text-[10px] sm:text-xs md:text-sm font-bold text-center leading-tight ${
-                    isSelected ? "text-slate-900" : "text-slate-400"
-                  }`}>
-                  {option.label}
-                </span>
-              </motion.button>
-            );
-          })}
-        </div>
-
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 md:gap-4 w-full max-w-md">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 md:gap-4 w-full max-w-md mb-4">
           <button
             type="button"
             onClick={handleReset}
@@ -376,19 +310,17 @@ const HeroSection = () => {
           </button>
           <motion.button
             type="button"
-            disabled={items.length === 0 || isGenerating}
+            disabled={!canGenerate || isGenerating}
             whileHover={
-              items.length > 0 && !isGenerating
+              canGenerate && !isGenerating
                 ? { scale: 1.02, backgroundColor: "#9629BF" }
                 : {}
             }
-            whileTap={
-              items.length > 0 && !isGenerating ? { scale: 0.98 } : {}
-            }
+            whileTap={canGenerate && !isGenerating ? { scale: 0.98 } : {}}
             onClick={() => void handleGenerate()}
             className={`flex-1 py-3 md:py-4 px-4 md:px-8 rounded-xl font-bold text-sm md:text-base transition-all shadow-lg shadow-purple-200
               ${
-                items.length > 0 && !isGenerating
+                canGenerate && !isGenerating
                   ? "bg-[#AD34DD] text-white hover:bg-[#9629BF]"
                   : "bg-purple-200 text-white cursor-not-allowed"
               }
@@ -397,6 +329,16 @@ const HeroSection = () => {
           </motion.button>
         </div>
       </div>
+
+      <StickyFeatureBar
+        groupCount={groups.length}
+        activeGroupIndex={activeGroupIndex}
+        onActiveGroupChange={handleActiveGroupChange}
+        selectedOptions={activeSelected}
+        onToggleOption={toggleOption}
+        language={language}
+        onLanguageChange={setLanguage}
+      />
     </section>
   );
 };
