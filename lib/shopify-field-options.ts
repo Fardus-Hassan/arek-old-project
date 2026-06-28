@@ -136,7 +136,7 @@ export function googleConditionForShopifyCsv(
 }
 
 export const DEFAULT_SHOPIFY_PUBLISHED = true;
-export const DEFAULT_SHOPIFY_STATUS = "Active";
+export const DEFAULT_SHOPIFY_STATUS = "Draft";
 export const DEFAULT_WEIGHT_GRAMS = "100";
 export const DEFAULT_INVENTORY_QTY = "1";
 

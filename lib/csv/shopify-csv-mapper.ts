@@ -1,6 +1,7 @@
 import type { ProductListingData } from "@/lib/map-document-to-product-listing";
 import {
   DEFAULT_INVENTORY_QTY,
+  DEFAULT_SHOPIFY_STATUS,
   DEFAULT_WEIGHT_GRAMS,
   stanForShopifyCsv,
   googleConditionForShopifyCsv,
@@ -175,7 +176,7 @@ export function mapProductToPrimaryRow(
     Type: category,
     Tags: formatTags(product.tags),
     "Published on online store": opts.published ? "TRUE" : "FALSE",
-    Status: opts.shopifyStatus || "Active",
+    Status: opts.shopifyStatus || DEFAULT_SHOPIFY_STATUS,
     SKU: opts.sku.trim(),
     "Option1 name": size ? "Size" : "",
     "Option1 value": size,

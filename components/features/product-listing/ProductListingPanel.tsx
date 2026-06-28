@@ -668,7 +668,7 @@ export function ProductListingPanel({
                     })
                   }>
                   <SelectTrigger className={skuPriceInputClass}>
-                    <SelectValue placeholder="Active" />
+                    <SelectValue placeholder="Draft" />
                   </SelectTrigger>
                   <SelectContent>
                     {STATUS_OPTIONS.map((s) => (
