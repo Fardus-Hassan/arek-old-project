@@ -8,6 +8,10 @@ import {
   EditableTextBlock,
 } from "@/components/features/ai-result/EditableTextBlock";
 import { SearchableSelect } from "@/components/shared/SearchableSelect";
+import {
+  GenderDisplayValue,
+  GenderRadioField,
+} from "@/components/shared/GenderRadioField";
 import { OptionLanguageSelect } from "@/components/features/ai-result/OptionLanguageSelect";
 import {
   Select,
@@ -31,7 +35,6 @@ import {
   normalizeGoogleCondition,
 } from "@/lib/shopify-field-options";
 import {
-  displayGenderLabel,
   readGenerationLanguage,
   type OutputLanguage,
 } from "@/lib/feature-catalog";
@@ -371,21 +374,18 @@ export function ProductListingPanel({
               <div>
                 <span className="text-gray-500 block mb-1 text-xs">Gender</span>
                 {isEditing && canEdit ? (
-                  <SearchableSelect
-                    className={skuPriceInputClass}
-                    placeholder="Select gender"
+                  <GenderRadioField
+                    name="product-gender"
                     options={catalog.gender}
-                    value={displayFieldValue(productData.details.gender)}
-                    onValueChange={(v) =>
+                    value={productData.details.gender}
+                    onChange={(v) =>
                       applyBatchUpdate((b) => {
                         ensureNestedObject(b, "product_details").gender = v;
                       })
                     }
                   />
                 ) : (
-                  <p className="text-xs sm:text-sm text-gray-900 capitalize">
-                    {displayGenderLabel(productData.details.gender) || "—"}
-                  </p>
+                  <GenderDisplayValue value={productData.details.gender} />
                 )}
               </div>
             </div>
