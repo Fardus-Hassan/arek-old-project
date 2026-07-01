@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import PetalLoader from "@/components/ui/PetalLoader";
 import { useRouter } from "next/navigation";
 import { loadGeneratedDocument } from "@/lib/generated-document-storage";
+import { playNotificationSound } from "@/lib/notification-sound";
 
 export default function AnalyzContent() {
   const [currentStep, setCurrentStep] = useState(1);
@@ -65,6 +66,7 @@ export default function AnalyzContent() {
         const t2 = setTimeout(() => {
           setCurrentStep(4);
           setProgress(100);
+          playNotificationSound();
         }, 1400);
         const t3 = setTimeout(() => {
           router.push("/ai-result");

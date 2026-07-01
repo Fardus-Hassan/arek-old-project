@@ -1,4 +1,5 @@
 import type { SingleDocument } from "@/lib/api/documentApi";
+import type { OutputLanguage } from "@/lib/feature-catalog";
 
 /** Persists last successful POST /documents `data` across reloads; overwritten only on new success. */
 export const GENERATED_DOCUMENT_STORAGE_KEY = "ajpropl_last_generated_document_v1";
@@ -10,6 +11,8 @@ export type StoredGeneratedPayload = {
   document: SingleDocument;
   /** From POST `data.generatedImageId`; order aligns with UI tab index. */
   generatedImageIds?: string[];
+  /** Output language used at generation time (dropdown option lists). */
+  outputLanguage?: OutputLanguage;
 };
 
 function persistGeneratedImageIdsSession(
@@ -67,20 +70,28 @@ export function getGeneratedImageIdsForDocument(
 export function saveGeneratedDocument(
   document: SingleDocument,
   generatedImageIds?: string[] | null,
+  outputLanguage?: OutputLanguage,
 ): void {
   if (typeof window === "undefined") return;
   try {
     let ids = generatedImageIds?.filter(Boolean) ?? [];
-    if (!ids.length) {
+    let lang = outputLanguage;
+    if (!ids.length || !lang) {
       const prev = loadGeneratedDocument();
-      if (prev?.document?.id === document.id && prev.generatedImageIds?.length) {
-        ids = prev.generatedImageIds;
+      if (prev?.document?.id === document.id) {
+        if (!ids.length && prev.generatedImageIds?.length) {
+          ids = prev.generatedImageIds;
+        }
+        if (!lang && prev.outputLanguage) {
+          lang = prev.outputLanguage;
+        }
       }
     }
     const payload: StoredGeneratedPayload = {
       savedAt: new Date().toISOString(),
       document,
       ...(ids.length ? { generatedImageIds: ids } : {}),
+      ...(lang ? { outputLanguage: lang } : {}),
     };
     localStorage.setItem(
       GENERATED_DOCUMENT_STORAGE_KEY,

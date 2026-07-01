@@ -16,9 +16,10 @@ const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
 
 export { COOKIE_MAX_AGE_SECONDS };
 
-/** Overview + admin management — SUPERADMIN only (`/dashboard/admin/...`). */
+/** Overview + admin management + feature settings — SUPERADMIN only. */
 export function isSuperAdminOnlyDashboardPath(pathname: string): boolean {
   if (pathname === "/dashboard/admin") return true;
   if (pathname.startsWith("/dashboard/admin/admin-management")) return true;
+  if (pathname.startsWith("/dashboard/admin/feature-settings")) return true;
   return false;
 }

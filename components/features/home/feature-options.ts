@@ -48,3 +48,14 @@ export const FEATURE_OPTIONS: FeatureOption[] = [
     icon: Ruler,
   },
 ];
+
+/** Pre-selected for every new group (excludes Image diagram). */
+export const DEFAULT_GROUP_FEATURE_IDS = [
+  "dimensions",
+  "try-on",
+  "mannequin",
+  "removal",
+  "model",
+] as const;
+
+export const DEFAULT_OUTPUT_LANGUAGE = "Polish" as const;

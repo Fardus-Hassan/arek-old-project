@@ -5,6 +5,7 @@ import { userApi } from "./api/userApi";
 import { adminApi } from "./api/adminApi";
 import { documentApi } from "./api/documentApi";
 import { fileSaveApi } from "./api/fileSaveApi";
+import { featureApi } from "./api/featureApi";
 
 export const makeStore = () => {
   return configureStore({
@@ -15,6 +16,7 @@ export const makeStore = () => {
       [adminApi.reducerPath]: adminApi.reducer,
       [documentApi.reducerPath]: documentApi.reducer,
       [fileSaveApi.reducerPath]: fileSaveApi.reducer,
+      [featureApi.reducerPath]: featureApi.reducer,
     },
     middleware: (getDefaultMiddleware) =>
       getDefaultMiddleware().concat(
@@ -23,6 +25,7 @@ export const makeStore = () => {
         adminApi.middleware,
         documentApi.middleware,
         fileSaveApi.middleware,
+        featureApi.middleware,
       ),
   });
 };

@@ -13,6 +13,8 @@ import {
 } from "@/lib/generated-document-storage";
 import { normalizeDocumentApiData } from "@/lib/document-api-helpers";
 import { mapGarmentOptionToApi } from "@/lib/garment-feature-map";
+import { DEFAULT_GROUP_FEATURE_IDS, DEFAULT_OUTPUT_LANGUAGE } from "./feature-options";
+import { persistGenerationLanguage } from "@/lib/feature-catalog";
 import { ImageGroupCard } from "./ImageGroupCard";
 import { BulkUploadSection } from "./BulkUploadSection";
 import { StickyFeatureBar } from "./StickyFeatureBar";
@@ -38,7 +40,9 @@ function isGroupComplete(group: ImageGroup): boolean {
 const HeroSection = () => {
   const [groups, setGroups] = useState<ImageGroup[]>([createEmptyGroup()]);
   const [activeGroupIndex, setActiveGroupIndex] = useState(0);
-  const [language, setLanguage] = useState<"English" | "Polish">("English");
+  const [language, setLanguage] = useState<"English" | "Polish">(
+    DEFAULT_OUTPUT_LANGUAGE,
+  );
   const router = useRouter();
   const [createDocument, { isLoading: isGenerating }] =
     useCreateDocumentMutation();
@@ -180,7 +184,7 @@ const HeroSection = () => {
     groups.forEach(revokeGroupPreviews);
     setGroups([createEmptyGroup()]);
     setActiveGroupIndex(0);
-    setLanguage("English");
+    setLanguage(DEFAULT_OUTPUT_LANGUAGE);
   };
 
   const handleGenerate = async () => {
@@ -199,6 +203,7 @@ const HeroSection = () => {
 
     clearGeneratedDocument();
     sessionStorage.setItem("generationStartedAt", new Date().toISOString());
+    persistGenerationLanguage(language);
     router.push("/analyzing");
 
     const images = groups.map((g) => g.front!);
@@ -208,7 +213,7 @@ const HeroSection = () => {
         features:
           g.selectedOptions.length > 0
             ? g.selectedOptions.map(mapGarmentOptionToApi)
-            : ["model"],
+            : DEFAULT_GROUP_FEATURE_IDS.map(mapGarmentOptionToApi),
       })),
       language,
     });
@@ -222,7 +227,7 @@ const HeroSection = () => {
       const { document, generatedImageIds } = normalizeDocumentApiData(
         res.data,
       );
-      saveGeneratedDocument(document, generatedImageIds);
+      saveGeneratedDocument(document, generatedImageIds, language);
       sessionStorage.setItem("generatedDocumentId", document.id);
       sessionStorage.removeItem("generationStartedAt");
       toast.success(res.message || "Generation started");

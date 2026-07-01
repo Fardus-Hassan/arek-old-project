@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import Image from "next/image";
 import { Download } from "lucide-react";
 import {
@@ -8,10 +8,7 @@ import {
   EditableTextBlock,
 } from "@/components/features/ai-result/EditableTextBlock";
 import { SearchableSelect } from "@/components/shared/SearchableSelect";
-import {
-  GenderDisplayValue,
-  GenderRadioField,
-} from "@/components/shared/GenderRadioField";
+import { OptionLanguageSelect } from "@/components/features/ai-result/OptionLanguageSelect";
 import {
   Select,
   SelectContent,
@@ -28,15 +25,17 @@ import {
 } from "@/lib/ai-result-document-helpers";
 import type { ProductListingData } from "@/lib/map-document-to-product-listing";
 import {
-  COLOR_LABEL_OPTIONS,
-  FABRIC_LABEL_OPTIONS,
   GOOGLE_CONDITION_OPTIONS,
-  SIZE_OPTIONS,
-  STAN_OPTIONS,
   STATUS_OPTIONS,
   displayFieldValue,
   normalizeGoogleCondition,
 } from "@/lib/shopify-field-options";
+import {
+  displayGenderLabel,
+  readGenerationLanguage,
+  type OutputLanguage,
+} from "@/lib/feature-catalog";
+import { useFeatureCatalogOptions } from "@/lib/hooks/useFeatureCatalogOptions";
 import { skuPriceInputClass } from "./product-listing-ui";
 
 export type ProductListingPanelProps = {
@@ -57,6 +56,7 @@ export type ProductListingPanelProps = {
   onSaveToDrive?: () => void;
   isSavingCsv?: boolean;
   compact?: boolean;
+  initialOptionsLanguage?: OutputLanguage;
 };
 
 export function ProductListingPanel({
@@ -77,7 +77,13 @@ export function ProductListingPanel({
   onSaveToDrive,
   isSavingCsv = false,
   compact = false,
+  initialOptionsLanguage,
 }: ProductListingPanelProps) {
+  const [optionsLanguage, setOptionsLanguage] = useState<OutputLanguage>(
+    () => initialOptionsLanguage ?? readGenerationLanguage(),
+  );
+  const { catalog } = useFeatureCatalogOptions(optionsLanguage);
+
   const maxImageIndex = Math.max(0, productData.images.length - 1);
   const safeSelectedImage = Math.min(selectedImage, maxImageIndex);
 
@@ -260,7 +266,7 @@ export function ProductListingPanel({
                 <SearchableSelect
                   className={skuPriceInputClass}
                   placeholder="Select size"
-                  options={SIZE_OPTIONS}
+                  options={catalog.size}
                   value={displayFieldValue(
                     dimensions?.selected_size != null
                       ? String(dimensions.selected_size)
@@ -286,39 +292,59 @@ export function ProductListingPanel({
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {isEditing && canEdit && (
+            <div className="md:col-span-2 flex justify-end">
+              <OptionLanguageSelect
+                value={optionsLanguage}
+                onChange={setOptionsLanguage}
+              />
+            </div>
+          )}
           <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6">
             <h3 className="text-xs sm:text-sm font-semibold text-gray-900 mb-3 sm:mb-4">
               Product Details
             </h3>
             <div className="space-y-2 sm:space-y-3">
-              <EditableInlineField
-                label="Category"
-                editing={isEditing}
-                value={
-                  isEditing && productData.details.category === "—"
-                    ? ""
-                    : productData.details.category
-                }
-                onChange={(v) =>
-                  applyBatchUpdate((b) => {
-                    ensureNestedObject(b, "product_details").category = v;
-                  })
-                }
-              />
-              <EditableInlineField
-                label="Brand"
-                editing={isEditing}
-                value={
-                  isEditing && productData.details.brand === "—"
-                    ? ""
-                    : productData.details.brand
-                }
-                onChange={(v) =>
-                  applyBatchUpdate((b) => {
-                    ensureNestedObject(b, "product_details").brand = v;
-                  })
-                }
-              />
+              <div>
+                <span className="text-gray-500 block mb-1 text-xs">Category</span>
+                {isEditing && canEdit ? (
+                  <SearchableSelect
+                    className={skuPriceInputClass}
+                    placeholder="Select category"
+                    options={catalog.category}
+                    value={displayFieldValue(productData.details.category)}
+                    onValueChange={(v) =>
+                      applyBatchUpdate((b) => {
+                        ensureNestedObject(b, "product_details").category = v;
+                      })
+                    }
+                  />
+                ) : (
+                  <p className="text-xs sm:text-sm text-gray-900">
+                    {productData.details.category}
+                  </p>
+                )}
+              </div>
+              <div>
+                <span className="text-gray-500 block mb-1 text-xs">Brand</span>
+                {isEditing && canEdit ? (
+                  <SearchableSelect
+                    className={skuPriceInputClass}
+                    placeholder="Select brand"
+                    options={catalog.brand}
+                    value={displayFieldValue(productData.details.brand)}
+                    onValueChange={(v) =>
+                      applyBatchUpdate((b) => {
+                        ensureNestedObject(b, "product_details").brand = v;
+                      })
+                    }
+                  />
+                ) : (
+                  <p className="text-xs sm:text-sm text-gray-900">
+                    {productData.details.brand}
+                  </p>
+                )}
+              </div>
               <div>
                 <span className="text-gray-500 block mb-1 text-xs">
                   Condition (Stan)
@@ -327,7 +353,7 @@ export function ProductListingPanel({
                   <SearchableSelect
                     className={skuPriceInputClass}
                     placeholder="Select condition"
-                    options={STAN_OPTIONS}
+                    options={catalog.condition}
                     value={displayFieldValue(productData.productCondition)}
                     onValueChange={(v) =>
                       applyBatchUpdate((b) => {
@@ -345,17 +371,21 @@ export function ProductListingPanel({
               <div>
                 <span className="text-gray-500 block mb-1 text-xs">Gender</span>
                 {isEditing && canEdit ? (
-                  <GenderRadioField
-                    name="product-gender"
-                    value={productData.details.gender}
-                    onChange={(v) =>
+                  <SearchableSelect
+                    className={skuPriceInputClass}
+                    placeholder="Select gender"
+                    options={catalog.gender}
+                    value={displayFieldValue(productData.details.gender)}
+                    onValueChange={(v) =>
                       applyBatchUpdate((b) => {
                         ensureNestedObject(b, "product_details").gender = v;
                       })
                     }
                   />
                 ) : (
-                  <GenderDisplayValue value={productData.details.gender} />
+                  <p className="text-xs sm:text-sm text-gray-900 capitalize">
+                    {displayGenderLabel(productData.details.gender) || "—"}
+                  </p>
                 )}
               </div>
             </div>
@@ -386,7 +416,7 @@ export function ProductListingPanel({
                   <SearchableSelect
                     className={skuPriceInputClass}
                     placeholder="Select fabric"
-                    options={FABRIC_LABEL_OPTIONS}
+                    options={catalog.fabric}
                     value={displayFieldValue(productData.metafields.fabric)}
                     onValueChange={(v) =>
                       applyBatchUpdate((b) => {
@@ -457,7 +487,7 @@ export function ProductListingPanel({
                     <SearchableSelect
                       className={skuPriceInputClass}
                       placeholder="Select size"
-                      options={SIZE_OPTIONS}
+                      options={catalog.size}
                       value={displayFieldValue(productData.selectedSize)}
                       onValueChange={(v) =>
                         applyBatchUpdate((b) => {
@@ -477,7 +507,7 @@ export function ProductListingPanel({
                     <SearchableSelect
                       className={skuPriceInputClass}
                       placeholder="Select color"
-                      options={COLOR_LABEL_OPTIONS}
+                      options={catalog.color}
                       value={displayFieldValue(productData.selectedColor)}
                       onValueChange={(v) =>
                         applyBatchUpdate((b) => {
@@ -507,20 +537,22 @@ export function ProductListingPanel({
                       }
                     />
                   </div>
-                  <EditableInlineField
-                    label="Feature (Wzór)"
-                    editing
-                    value={
-                      productData.variants.feature === "—"
-                        ? ""
-                        : productData.variants.feature
-                    }
-                    onChange={(v) =>
-                      applyBatchUpdate((b) => {
-                        ensureNestedObject(b, "variant_data").feature = v;
-                      })
-                    }
-                  />
+                  <div>
+                    <span className="text-gray-500 block mb-1 text-xs">
+                      Feature (Wzór)
+                    </span>
+                    <SearchableSelect
+                      className={skuPriceInputClass}
+                      placeholder="Select feature"
+                      options={catalog.feature}
+                      value={displayFieldValue(productData.variants.feature)}
+                      onValueChange={(v) =>
+                        applyBatchUpdate((b) => {
+                          ensureNestedObject(b, "variant_data").feature = v;
+                        })
+                      }
+                    />
+                  </div>
                 </>
               ) : (
                 <>

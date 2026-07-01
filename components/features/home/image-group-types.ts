@@ -1,3 +1,5 @@
+import { DEFAULT_GROUP_FEATURE_IDS } from "./feature-options";
+
 export type GroupSlot = "front" | "back";
 
 export type ImageGroup = {
@@ -19,7 +21,7 @@ export function createEmptyGroup(): ImageGroup {
     back: null,
     frontPreview: null,
     backPreview: null,
-    selectedOptions: [],
+    selectedOptions: [...DEFAULT_GROUP_FEATURE_IDS],
   };
 }
 

@@ -18,6 +18,7 @@ import {
   Shield,
   LogOut,
   FolderOpen,
+  Settings,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -28,6 +29,7 @@ import { userApi } from "@/lib/api/userApi";
 import { adminApi } from "@/lib/api/adminApi";
 import { documentApi } from "@/lib/api/documentApi";
 import { fileSaveApi } from "@/lib/api/fileSaveApi";
+import { featureApi } from "@/lib/api/featureApi";
 import { LOGIN_PATH, ROLE_SUPERADMIN } from "@/lib/auth-constants";
 import { clearAuthSession, getUserRole } from "@/lib/auth-session";
 
@@ -62,6 +64,12 @@ const allNavigationItems = [
     icon: Shield,
     superAdminOnly: true,
   },
+  {
+    label: "Feature Settings",
+    href: "/dashboard/admin/feature-settings",
+    icon: Settings,
+    superAdminOnly: true,
+  },
 ] as const;
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
@@ -91,6 +99,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     dispatch(adminApi.util.resetApiState());
     dispatch(documentApi.util.resetApiState());
     dispatch(fileSaveApi.util.resetApiState());
+    dispatch(featureApi.util.resetApiState());
     router.push(LOGIN_PATH);
   };
 

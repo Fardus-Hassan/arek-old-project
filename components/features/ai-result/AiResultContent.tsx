@@ -2,8 +2,8 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Download, CheckCircle, Pencil, Loader2 } from "lucide-react";
-import Image from "next/image";
 import { Button } from "@/components/ui/button";
+import Image from "next/image";
 import {
   getGeneratedImageIdsForDocument,
   loadGeneratedDocument,
@@ -39,20 +39,19 @@ import { buildShopifyProductImportCsv } from "@/lib/csv/shopify-product-csv";
 import {
   DEFAULT_SHOPIFY_PUBLISHED,
   DEFAULT_SHOPIFY_STATUS,
-  COLOR_LABEL_OPTIONS,
-  FABRIC_LABEL_OPTIONS,
   GOOGLE_CONDITION_OPTIONS,
-  SIZE_OPTIONS,
-  STAN_OPTIONS,
   STATUS_OPTIONS,
   displayFieldValue,
   normalizeGoogleCondition,
 } from "@/lib/shopify-field-options";
 import { SearchableSelect } from "@/components/shared/SearchableSelect";
 import {
-  GenderDisplayValue,
-  GenderRadioField,
-} from "@/components/shared/GenderRadioField";
+  displayGenderLabel,
+  readGenerationLanguage,
+  type OutputLanguage,
+} from "@/lib/feature-catalog";
+import { useFeatureCatalogOptions } from "@/lib/hooks/useFeatureCatalogOptions";
+import { OptionLanguageSelect } from "@/components/features/ai-result/OptionLanguageSelect";
 import {
   Select,
   SelectContent,
@@ -164,10 +163,18 @@ const AiResultContent: React.FC = () => {
 
   const [updateDocument, { isLoading: isUpdatingDocument }] =
     useUpdateDocumentMutation();
+  const [optionsLanguage, setOptionsLanguage] = useState<OutputLanguage>(() =>
+    readGenerationLanguage(),
+  );
 
   useEffect(() => {
     const loaded = loadGeneratedDocument();
     setLocalPayload(loaded);
+    if (loaded?.outputLanguage) {
+      setOptionsLanguage(loaded.outputLanguage);
+    } else {
+      setOptionsLanguage(readGenerationLanguage());
+    }
     if (loaded?.document) {
       const { skuByTab: s, priceByTab: p } = skuPriceMapsFromDocument(
         loaded.document,
@@ -361,6 +368,7 @@ const AiResultContent: React.FC = () => {
   const sku = skuByTab[safeActiveTab] ?? "";
   const price = priceByTab[safeActiveTab] ?? "";
   const isEditing = isEditingByTab[safeActiveTab] ?? false;
+  const { catalog } = useFeatureCatalogOptions(optionsLanguage);
 
   const productData =
     batches.length > 0 && batches[safeActiveTab]
@@ -763,7 +771,7 @@ const AiResultContent: React.FC = () => {
                       <SearchableSelect
                         className={skuPriceInputClass}
                         placeholder="Select size"
-                        options={SIZE_OPTIONS}
+                        options={catalog.size}
                         value={displayFieldValue(
                           dimensions?.selected_size != null
                             ? String(dimensions.selected_size)
@@ -790,6 +798,14 @@ const AiResultContent: React.FC = () => {
             )}
 
             {/* Product Details and Metafields */}
+            {isEditing && canEdit && (
+              <div className="flex justify-end">
+                <OptionLanguageSelect
+                  value={optionsLanguage}
+                  onChange={setOptionsLanguage}
+                />
+              </div>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Product Details */}
               <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6">
@@ -797,34 +813,51 @@ const AiResultContent: React.FC = () => {
                   Product Details
                 </h3>
                 <div className="space-y-2 sm:space-y-3">
-                  <EditableInlineField
-                    label="Category"
-                    editing={isEditing}
-                    value={
-                      isEditing && productData.details.category === "—"
-                        ? ""
-                        : productData.details.category
-                    }
-                    onChange={(v) =>
-                      applyBatchUpdate(safeActiveTab, (b) => {
-                        ensureNestedObject(b, "product_details").category = v;
-                      })
-                    }
-                  />
-                  <EditableInlineField
-                    label="Brand"
-                    editing={isEditing}
-                    value={
-                      isEditing && productData.details.brand === "—"
-                        ? ""
-                        : productData.details.brand
-                    }
-                    onChange={(v) =>
-                      applyBatchUpdate(safeActiveTab, (b) => {
-                        ensureNestedObject(b, "product_details").brand = v;
-                      })
-                    }
-                  />
+                  <div>
+                    <span className="text-gray-500 block mb-1 text-xs">
+                      Category
+                    </span>
+                    {isEditing && canEdit ? (
+                      <SearchableSelect
+                        className={skuPriceInputClass}
+                        placeholder="Select category"
+                        options={catalog.category}
+                        value={displayFieldValue(productData.details.category)}
+                        onValueChange={(v) =>
+                          applyBatchUpdate(safeActiveTab, (b) => {
+                            ensureNestedObject(b, "product_details").category =
+                              v;
+                          })
+                        }
+                      />
+                    ) : (
+                      <p className="text-xs sm:text-sm text-gray-900">
+                        {productData.details.category}
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <span className="text-gray-500 block mb-1 text-xs">
+                      Brand
+                    </span>
+                    {isEditing && canEdit ? (
+                      <SearchableSelect
+                        className={skuPriceInputClass}
+                        placeholder="Select brand"
+                        options={catalog.brand}
+                        value={displayFieldValue(productData.details.brand)}
+                        onValueChange={(v) =>
+                          applyBatchUpdate(safeActiveTab, (b) => {
+                            ensureNestedObject(b, "product_details").brand = v;
+                          })
+                        }
+                      />
+                    ) : (
+                      <p className="text-xs sm:text-sm text-gray-900">
+                        {productData.details.brand}
+                      </p>
+                    )}
+                  </div>
                   <div>
                     <span className="text-gray-500 block mb-1 text-xs">
                       Condition (Stan)
@@ -833,7 +866,7 @@ const AiResultContent: React.FC = () => {
                       <SearchableSelect
                         className={skuPriceInputClass}
                         placeholder="Select condition"
-                        options={STAN_OPTIONS}
+                        options={catalog.condition}
                         value={displayFieldValue(productData.productCondition)}
                         onValueChange={(v) =>
                           applyBatchUpdate(safeActiveTab, (b) => {
@@ -854,17 +887,21 @@ const AiResultContent: React.FC = () => {
                       Gender
                     </span>
                     {isEditing && canEdit ? (
-                      <GenderRadioField
-                        name="ai-result-gender"
-                        value={productData.details.gender}
-                        onChange={(v) =>
+                      <SearchableSelect
+                        className={skuPriceInputClass}
+                        placeholder="Select gender"
+                        options={catalog.gender}
+                        value={displayFieldValue(productData.details.gender)}
+                        onValueChange={(v) =>
                           applyBatchUpdate(safeActiveTab, (b) => {
                             ensureNestedObject(b, "product_details").gender = v;
                           })
                         }
                       />
                     ) : (
-                      <GenderDisplayValue value={productData.details.gender} />
+                      <p className="text-xs sm:text-sm text-gray-900 capitalize">
+                        {displayGenderLabel(productData.details.gender) || "—"}
+                      </p>
                     )}
                   </div>
                 </div>
@@ -898,7 +935,7 @@ const AiResultContent: React.FC = () => {
                       <SearchableSelect
                         className={skuPriceInputClass}
                         placeholder="Select fabric"
-                        options={FABRIC_LABEL_OPTIONS}
+                        options={catalog.fabric}
                         value={displayFieldValue(productData.metafields.fabric)}
                         onValueChange={(v) =>
                           applyBatchUpdate(safeActiveTab, (b) => {
@@ -970,7 +1007,7 @@ const AiResultContent: React.FC = () => {
                         <SearchableSelect
                           className={skuPriceInputClass}
                           placeholder="Select size"
-                          options={SIZE_OPTIONS}
+                          options={catalog.size}
                           value={displayFieldValue(productData.selectedSize)}
                           onValueChange={(v) =>
                             applyBatchUpdate(safeActiveTab, (b) => {
@@ -990,7 +1027,7 @@ const AiResultContent: React.FC = () => {
                         <SearchableSelect
                           className={skuPriceInputClass}
                           placeholder="Select color"
-                          options={COLOR_LABEL_OPTIONS}
+                          options={catalog.color}
                           value={displayFieldValue(productData.selectedColor)}
                           onValueChange={(v) =>
                             applyBatchUpdate(safeActiveTab, (b) => {
@@ -1021,20 +1058,22 @@ const AiResultContent: React.FC = () => {
                           }
                         />
                       </div>
-                      <EditableInlineField
-                        label="Feature (Wzór)"
-                        editing
-                        value={
-                          productData.variants.feature === "—"
-                            ? ""
-                            : productData.variants.feature
-                        }
-                        onChange={(v) =>
-                          applyBatchUpdate(safeActiveTab, (b) => {
-                            ensureNestedObject(b, "variant_data").feature = v;
-                          })
-                        }
-                      />
+                      <div>
+                        <span className="text-gray-500 block mb-1 text-xs">
+                          Feature (Wzór)
+                        </span>
+                        <SearchableSelect
+                          className={skuPriceInputClass}
+                          placeholder="Select feature"
+                          options={catalog.feature}
+                          value={displayFieldValue(productData.variants.feature)}
+                          onValueChange={(v) =>
+                            applyBatchUpdate(safeActiveTab, (b) => {
+                              ensureNestedObject(b, "variant_data").feature = v;
+                            })
+                          }
+                        />
+                      </div>
                     </>
                   ) : (
                     <>
@@ -1328,6 +1367,39 @@ const AiResultContent: React.FC = () => {
                     </svg>
                     {isSavingCsv ? "Saving..." : "Save"}
                   </button>
+
+                  {canEdit && !isEditing && (
+                    <button
+                      type="button"
+                      onClick={beginEdit}
+                      className="w-full sm:flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 text-xs sm:text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors">
+                      <Pencil className="w-3 h-3 sm:w-4 sm:h-4" />
+                      Edit
+                    </button>
+                  )}
+
+                  {isEditing && (
+                    <>
+                      <button
+                        type="button"
+                        disabled={isUpdatingDocument}
+                        onClick={cancelEdit}
+                        className="w-full sm:flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 text-xs sm:text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50">
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isUpdatingDocument}
+                        onClick={handleUpdateDocument}
+                        className="w-full sm:flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-[#A825C7] text-white text-xs sm:text-sm font-medium rounded-lg hover:bg-purple-500 transition-colors disabled:opacity-50">
+                        {isUpdatingDocument ? (
+                          <Loader2 className="w-3 h-3 sm:w-4 sm:h-4 animate-spin" />
+                        ) : (
+                          "Update"
+                        )}
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
