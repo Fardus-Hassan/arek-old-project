@@ -21,6 +21,14 @@ function csvMultiValue(raw: string | undefined | null): string {
   return joinMultiValues(parseMultiValues(raw));
 }
 
+/** Same as csvMultiValue, but each part lowercased — text itself is not remapped. */
+function csvMultiValueLower(raw: string | undefined | null): string {
+  if (isPlaceholder(raw)) return "";
+  return joinMultiValues(
+    parseMultiValues(raw).map((part) => part.toLowerCase()),
+  );
+}
+
 function escapeHtmlText(s: string): string {
   return s
     .replace(/&/g, "&amp;")
@@ -140,10 +148,11 @@ export function mapProductToPrimaryRow(
   const vendor = csvMultiValue(product.details.brand);
   const category = csvMultiValue(product.details.category);
   const size = csvMultiValue(product.selectedSize);
-  const color = csvMultiValue(product.selectedColor);
+  const color = csvMultiValueLower(product.selectedColor);
   const googleCondition = googleConditionForShopifyCsv(product.variants.condition);
   const feature = csvMultiValue(product.variants.feature);
   const fabric = csvMultiValue(product.metafields.fabric);
+  const fabricLower = csvMultiValueLower(product.metafields.fabric);
   const stan = stanForShopifyCsv(
     parseMultiValues(product.productCondition)[0] ??
       product.productCondition,
@@ -205,7 +214,7 @@ export function mapProductToPrimaryRow(
     "Rozmiar pod biustem (product.metafields.custom.underbust)":
       extractNumericDim(product.metafields.underBust),
     "Wzór (product.metafields.custom.wz_r)": feature,
-    "Fabric (product.metafields.shopify.fabric)": fabric,
+    "Fabric (product.metafields.shopify.fabric)": fabricLower,
   };
 }
 
