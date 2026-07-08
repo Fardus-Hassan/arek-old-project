@@ -1,4 +1,5 @@
 import type { ProductListingData } from "@/lib/map-document-to-product-listing";
+import { joinMultiValues, parseMultiValues } from "@/lib/multi-value-string";
 import {
   DEFAULT_INVENTORY_QTY,
   DEFAULT_SHOPIFY_STATUS,
@@ -6,17 +7,18 @@ import {
   stanForShopifyCsv,
   googleConditionForShopifyCsv,
 } from "@/lib/shopify-field-options";
-import {
-  toColorMetaobjectHandle,
-  toFabricMetaobjectHandle,
-  toMetaobjectHandleList,
-} from "@/lib/shopify-metaobject-handles";
 import type { ShopifyCsvColumn } from "./shopify-csv-columns";
 
 function isPlaceholder(v: string | undefined | null): boolean {
   if (v == null) return true;
   const t = v.trim();
   return t === "" || t === "—";
+}
+
+/** Multi-value catalog fields in CSV: `a; b; c` */
+function csvMultiValue(raw: string | undefined | null): string {
+  if (isPlaceholder(raw)) return "";
+  return joinMultiValues(parseMultiValues(raw));
 }
 
 function escapeHtmlText(s: string): string {
@@ -135,25 +137,17 @@ export function mapProductToPrimaryRow(
   const handle = buildShopifyHandle(product);
   const title = isPlaceholder(product.title) ? "Untitled product" : product.title.trim();
   const description = buildDescriptionHtml(product);
-  const vendor = isPlaceholder(product.details.brand) ? "" : product.details.brand.trim();
-  const category = isPlaceholder(product.details.category)
-    ? ""
-    : product.details.category.trim();
-  const size = product.selectedSize.trim();
-  const colorLabel = product.selectedColor.trim();
-  const colorHandle = toMetaobjectHandleList(colorLabel, toColorMetaobjectHandle);
+  const vendor = csvMultiValue(product.details.brand);
+  const category = csvMultiValue(product.details.category);
+  const size = csvMultiValue(product.selectedSize);
+  const color = csvMultiValue(product.selectedColor);
   const googleCondition = googleConditionForShopifyCsv(product.variants.condition);
-  const feature = isPlaceholder(product.variants.feature)
-    ? ""
-    : product.variants.feature.trim();
-  const fabricLabel = isPlaceholder(product.metafields.fabric)
-    ? ""
-    : product.metafields.fabric.trim();
-  const fabricHandle = toMetaobjectHandleList(
-    fabricLabel,
-    toFabricMetaobjectHandle,
+  const feature = csvMultiValue(product.variants.feature);
+  const fabric = csvMultiValue(product.metafields.fabric);
+  const stan = stanForShopifyCsv(
+    parseMultiValues(product.productCondition)[0] ??
+      product.productCondition,
   );
-  const stan = stanForShopifyCsv(product.productCondition);
   const productCode = isPlaceholder(product.metafields.productCode)
     ? ""
     : product.metafields.productCode.trim();
@@ -193,14 +187,14 @@ export function mapProductToPrimaryRow(
     "Image position": imgUrl ? "1" : "",
     "Image alt text": imgAlt,
     "Gift card": "FALSE",
-    "Color (product.metafields.shopify.color-pattern)": colorHandle,
+    "Color (product.metafields.shopify.color-pattern)": color,
     "Google Shopping / Gender": normalizeGender(product.details.gender),
     "Google Shopping / Condition": googleCondition,
     "Rozmiar (product.metafields.custom.rozmiar)": size,
     "Producent (product.metafields.custom.producent)": vendor,
     "Stan (product.metafields.custom.stan)": stan,
     "Kod produktu: (product.metafields.custom.kod_produktu_)": productCode,
-    "Skład (product.metafields.custom.sk_ad)": fabricLabel,
+    "Skład (product.metafields.custom.sk_ad)": fabric,
     "Szerokość od pachy do pachy (product.metafields.custom.szeroko_od_pachy_do_pachy_)":
       extractNumericDim(product.metafields.chestWidth),
     "Długość tył (product.metafields.custom.d_ugo_ty_)": backOrDress,
@@ -211,7 +205,7 @@ export function mapProductToPrimaryRow(
     "Rozmiar pod biustem (product.metafields.custom.underbust)":
       extractNumericDim(product.metafields.underBust),
     "Wzór (product.metafields.custom.wz_r)": feature,
-    "Fabric (product.metafields.shopify.fabric)": fabricHandle,
+    "Fabric (product.metafields.shopify.fabric)": fabric,
   };
 }
 

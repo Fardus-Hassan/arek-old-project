@@ -51,10 +51,7 @@ export function getCatalogOptions(
       isPolish ? record?.categoryPolish : record?.categoryEnglish,
       [],
     ),
-    brand: withFallback(
-      isPolish ? record?.vendorPolish : record?.vendorsEnglish,
-      [],
-    ),
+    brand: withFallback(record?.productVendor, []),
     fabric: withFallback(
       isPolish ? record?.fabricPolish : record?.fabricEnglish,
       FABRIC_LABEL_OPTIONS,

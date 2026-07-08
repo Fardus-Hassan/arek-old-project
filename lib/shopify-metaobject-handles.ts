@@ -3,6 +3,8 @@
  * not Polish display labels. Maps UI/AI labels → store handles at export time.
  */
 
+import { joinMultiValues, parseMultiValues } from "@/lib/multi-value-string";
+
 /** Handles that exist in the client's Shopify store (fabrics). */
 export const SHOPIFY_FABRIC_HANDLES = [
   "bawelna",
@@ -113,16 +115,13 @@ export function toColorMetaobjectHandle(raw: string): string {
 }
 
 /**
- * List metaobject field — comma-separated handles, e.g. `bawelna,polyester`.
- * Input may be comma-separated Polish labels.
+ * List metaobject field — semicolon-separated handles, e.g. `bawelna; polyester`.
+ * Input may be semicolon- or comma-separated labels.
  */
 export function toMetaobjectHandleList(
   raw: string,
   mapper: (part: string) => string,
 ): string {
-  return raw
-    .split(",")
-    .map((part) => mapper(part.trim()))
-    .filter(Boolean)
-    .join(",");
+  const parts = parseMultiValues(raw);
+  return joinMultiValues(parts.map((part) => mapper(part)).filter(Boolean));
 }

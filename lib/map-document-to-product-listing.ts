@@ -1,4 +1,5 @@
 import type { SingleDocument } from "@/lib/api/documentApi";
+import { joinMultiValues, parseMultiValues } from "@/lib/multi-value-string";
 import {
   DEFAULT_INVENTORY_QTY,
   DEFAULT_SHOPIFY_PUBLISHED,
@@ -316,7 +317,13 @@ export function mapBatchItemToProductListingData(
         : "";
 
   const normalizedStan = normalizeStanValue(rawProductCondition);
-  const productCondition = normalizedStan || DEFAULT_STAN;
+  const productCondition = rawProductCondition.includes(";")
+    ? joinMultiValues(
+        parseMultiValues(rawProductCondition).map(
+          (part) => normalizeStanValue(part) || part,
+        ),
+      ) || DEFAULT_STAN
+    : normalizedStan || DEFAULT_STAN;
 
   const published =
     batch.shopify_published === false ? false : DEFAULT_SHOPIFY_PUBLISHED;

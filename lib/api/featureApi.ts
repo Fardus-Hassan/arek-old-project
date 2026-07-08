@@ -10,8 +10,10 @@ export type FeatureRecord = {
   size: string[];
   categoryEnglish: string[];
   categoryPolish: string[];
-  vendorsEnglish: string[];
-  vendorPolish: string[];
+  vendorsEnglish?: string[];
+  vendorPolish?: string[];
+  /** CSV-uploaded vendors for Brand dropdown */
+  productVendor?: string[];
   fabricEnglish: string[];
   fabricPolish: string[];
   genderEnglish: string[];
@@ -29,12 +31,18 @@ export type FeatureRecord = {
   updatedAt?: string;
 };
 
-export type FeatureCreatePayload = Omit<
+export type FeatureSavePayload = Omit<
   FeatureRecord,
-  "id" | "customFields" | "createdAt" | "updatedAt"
+  "id" | "customFields" | "createdAt" | "updatedAt" | "productVendor" | "vendorsEnglish" | "vendorPolish"
 >;
 
-export type FeatureUpdatePayload = Partial<FeatureCreatePayload>;
+export type FeatureCreatePayload = FeatureSavePayload;
+
+export type FeatureUpdatePayload = Partial<FeatureSavePayload>;
+
+export type CreateProductVendorsPayload = {
+  productVendors: string[];
+};
 
 export const featureApi = createApi({
   reducerPath: "featureApi",
@@ -72,6 +80,36 @@ export const featureApi = createApi({
       }),
       invalidatesTags: ["Feature"],
     }),
+    uploadProductVendorsCsv: builder.mutation<ApiEnvelope<unknown>, File>({
+      query: (file) => {
+        const formData = new FormData();
+        formData.append("file", file);
+        return {
+          url: "/csv/product-vendors",
+          method: "POST",
+          body: formData,
+        };
+      },
+      invalidatesTags: ["Feature"],
+    }),
+    createProductVendors: builder.mutation<
+      ApiEnvelope<unknown>,
+      CreateProductVendorsPayload
+    >({
+      query: (body) => ({
+        url: "/csv/create-product-vendor",
+        method: "POST",
+        body,
+      }),
+      invalidatesTags: ["Feature"],
+    }),
+    deleteAllProductVendors: builder.mutation<ApiEnvelope<unknown>, void>({
+      query: () => ({
+        url: "/csv/product-vendor",
+        method: "DELETE",
+      }),
+      invalidatesTags: ["Feature"],
+    }),
   }),
 });
 
@@ -79,4 +117,7 @@ export const {
   useGetFeatureQuery,
   useCreateFeatureMutation,
   useUpdateFeatureMutation,
+  useUploadProductVendorsCsvMutation,
+  useCreateProductVendorsMutation,
+  useDeleteAllProductVendorsMutation,
 } = featureApi;

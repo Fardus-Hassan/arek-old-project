@@ -22,11 +22,8 @@ import {
 import {
   deepClonePayload,
   ensureNestedObject,
-  getDimInputValue,
-  parseListFromDelimited,
   parsePriceForApi,
   restoreImagesBatchTabFromSnapshot,
-  setDimInputValue,
   skuPriceMapsFromDocument,
   type ImageBatchRow,
 } from "@/lib/ai-result-document-helpers";
@@ -39,22 +36,8 @@ import { buildShopifyProductImportCsv } from "@/lib/csv/shopify-product-csv";
 import {
   DEFAULT_SHOPIFY_PUBLISHED,
   DEFAULT_SHOPIFY_STATUS,
-  GOOGLE_CONDITION_OPTIONS,
   STATUS_OPTIONS,
-  displayFieldValue,
-  normalizeGoogleCondition,
 } from "@/lib/shopify-field-options";
-import { SearchableSelect } from "@/components/shared/SearchableSelect";
-import {
-  GenderDisplayValue,
-  GenderRadioField,
-} from "@/components/shared/GenderRadioField";
-import {
-  readGenerationLanguage,
-  type OutputLanguage,
-} from "@/lib/feature-catalog";
-import { useFeatureCatalogOptions } from "@/lib/hooks/useFeatureCatalogOptions";
-import { OptionLanguageSelect } from "@/components/features/ai-result/OptionLanguageSelect";
 import {
   Select,
   SelectContent,
@@ -67,9 +50,10 @@ import { getAccessToken } from "@/lib/auth-session";
 import { useUpdateDocumentMutation } from "@/lib/api/documentApi";
 import { getRtkQueryErrorMessage } from "@/lib/api/authApi";
 import {
-  EditableInlineField,
   EditableTextBlock,
 } from "@/components/features/ai-result/EditableTextBlock";
+import { ProductListingPanel } from "@/components/features/product-listing/ProductListingPanel";
+import { stripAiFabricFeatureFromPayload } from "@/lib/fabric-feature-pending";
 
 /** Shown when nothing is stored in localStorage yet. */
 const FALLBACK_PRODUCT_DATA: ProductListingData = {
@@ -166,21 +150,14 @@ const AiResultContent: React.FC = () => {
 
   const [updateDocument, { isLoading: isUpdatingDocument }] =
     useUpdateDocumentMutation();
-  const [optionsLanguage, setOptionsLanguage] = useState<OutputLanguage>(() =>
-    readGenerationLanguage(),
-  );
 
   useEffect(() => {
     const loaded = loadGeneratedDocument();
-    setLocalPayload(loaded);
-    if (loaded?.outputLanguage) {
-      setOptionsLanguage(loaded.outputLanguage);
-    } else {
-      setOptionsLanguage(readGenerationLanguage());
-    }
-    if (loaded?.document) {
+    const prepared = loaded ? stripAiFabricFeatureFromPayload(loaded) : null;
+    setLocalPayload(prepared);
+    if (prepared?.document) {
       const { skuByTab: s, priceByTab: p } = skuPriceMapsFromDocument(
-        loaded.document,
+        prepared.document,
       );
       setSkuByTab(s);
       setPriceByTab(p);
@@ -306,12 +283,14 @@ const AiResultContent: React.FC = () => {
             activeTabForPatch,
             res.data.id,
           );
-          saveGeneratedDocument(mergedDoc, mergedIds);
-          setLocalPayload({
+          const nextPayload: StoredGeneratedPayload = {
             savedAt: new Date().toISOString(),
             document: mergedDoc,
             ...(mergedIds.length ? { generatedImageIds: mergedIds } : {}),
-          });
+          };
+          const stripped = stripAiFabricFeatureFromPayload(nextPayload);
+          saveGeneratedDocument(stripped.document, mergedIds);
+          setLocalPayload(stripped);
           const det = res.data.imageDetails;
           setSkuByTab((prev) => ({
             ...prev,
@@ -336,12 +315,14 @@ const AiResultContent: React.FC = () => {
               nextIds.length > 0
                 ? nextIds
                 : (localPayload.generatedImageIds ?? []);
-            saveGeneratedDocument(nextDoc, mergedIds);
-            setLocalPayload({
+            const nextPayload: StoredGeneratedPayload = {
               savedAt: new Date().toISOString(),
               document: nextDoc,
               ...(mergedIds.length ? { generatedImageIds: mergedIds } : {}),
-            });
+            };
+            const stripped = stripAiFabricFeatureFromPayload(nextPayload);
+            saveGeneratedDocument(stripped.document, mergedIds);
+            setLocalPayload(stripped);
             const maps = skuPriceMapsFromDocument(nextDoc);
             setSkuByTab(maps.skuByTab);
             setPriceByTab(maps.priceByTab);
@@ -371,7 +352,6 @@ const AiResultContent: React.FC = () => {
   const sku = skuByTab[safeActiveTab] ?? "";
   const price = priceByTab[safeActiveTab] ?? "";
   const isEditing = isEditingByTab[safeActiveTab] ?? false;
-  const { catalog } = useFeatureCatalogOptions(optionsLanguage);
 
   const productData =
     batches.length > 0 && batches[safeActiveTab]
@@ -760,396 +740,29 @@ const AiResultContent: React.FC = () => {
               </div>
             </div>
 
-            {/* Sizing & measurement */}
-            {((isEditing && canEdit) ||
-              productData.selectedSize !== "—") && (
-              <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6">
-                <h3 className="text-xs sm:text-sm font-semibold text-gray-900 mb-3 sm:mb-4">
-                  Sizing & measurement
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 text-xs sm:text-sm">
-                  <div>
-                    <span className="text-gray-500 block mb-1">Size</span>
-                    {isEditing && canEdit ? (
-                      <SearchableSelect
-                        className={skuPriceInputClass}
-                        placeholder="Select size"
-                        options={catalog.size}
-                        value={displayFieldValue(
-                          dimensions?.selected_size != null
-                            ? String(dimensions.selected_size)
-                            : productData.selectedSize,
-                        )}
-                        onValueChange={(v) =>
-                          applyBatchUpdate(safeActiveTab, (b) => {
-                            const d = ensureNestedObject(b, "dimensions");
-                            d.selected_size = v;
-                            d.available_sizes = [v];
-                            const vd = ensureNestedObject(b, "variant_data");
-                            vd.sizes = [v];
-                          })
-                        }
-                      />
-                    ) : (
-                      <p className="text-gray-900 mt-0.5">
-                        {productData.selectedSize}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Product Details and Metafields */}
-            {isEditing && canEdit && (
-              <div className="flex justify-end">
-                <OptionLanguageSelect
-                  value={optionsLanguage}
-                  onChange={setOptionsLanguage}
-                />
-              </div>
-            )}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Product Details */}
-              <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6">
-                <h3 className="text-xs sm:text-sm font-semibold text-gray-900 mb-3 sm:mb-4">
-                  Product Details
-                </h3>
-                <div className="space-y-2 sm:space-y-3">
-                  <div>
-                    <span className="text-gray-500 block mb-1 text-xs">
-                      Category
-                    </span>
-                    {isEditing && canEdit ? (
-                      <SearchableSelect
-                        className={skuPriceInputClass}
-                        placeholder="Select category"
-                        options={catalog.category}
-                        value={displayFieldValue(productData.details.category)}
-                        onValueChange={(v) =>
-                          applyBatchUpdate(safeActiveTab, (b) => {
-                            ensureNestedObject(b, "product_details").category =
-                              v;
-                          })
-                        }
-                      />
-                    ) : (
-                      <p className="text-xs sm:text-sm text-gray-900">
-                        {productData.details.category}
-                      </p>
-                    )}
-                  </div>
-                  <div>
-                    <span className="text-gray-500 block mb-1 text-xs">
-                      Brand
-                    </span>
-                    {isEditing && canEdit ? (
-                      <SearchableSelect
-                        className={skuPriceInputClass}
-                        placeholder="Select brand"
-                        options={catalog.brand}
-                        value={displayFieldValue(productData.details.brand)}
-                        onValueChange={(v) =>
-                          applyBatchUpdate(safeActiveTab, (b) => {
-                            ensureNestedObject(b, "product_details").brand = v;
-                          })
-                        }
-                      />
-                    ) : (
-                      <p className="text-xs sm:text-sm text-gray-900">
-                        {productData.details.brand}
-                      </p>
-                    )}
-                  </div>
-                  <div>
-                    <span className="text-gray-500 block mb-1 text-xs">
-                      Condition (Stan)
-                    </span>
-                    {isEditing && canEdit ? (
-                      <SearchableSelect
-                        className={skuPriceInputClass}
-                        placeholder="Select condition"
-                        options={catalog.condition}
-                        value={displayFieldValue(productData.productCondition)}
-                        onValueChange={(v) =>
-                          applyBatchUpdate(safeActiveTab, (b) => {
-                            b.product_condition = v;
-                            ensureNestedObject(b, "product_details").condition =
-                              v;
-                          })
-                        }
-                      />
-                    ) : (
-                      <p className="text-xs sm:text-sm text-gray-900">
-                        {productData.productCondition}
-                      </p>
-                    )}
-                  </div>
-                  <div>
-                    <span className="text-gray-500 block mb-1 text-xs">
-                      Gender
-                    </span>
-                    {isEditing && canEdit ? (
-                      <GenderRadioField
-                        name="ai-result-gender"
-                        options={catalog.gender}
-                        value={productData.details.gender}
-                        onChange={(v) =>
-                          applyBatchUpdate(safeActiveTab, (b) => {
-                            ensureNestedObject(b, "product_details").gender = v;
-                          })
-                        }
-                      />
-                    ) : (
-                      <GenderDisplayValue value={productData.details.gender} />
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Product Metafields */}
-              <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6">
-                <h3 className="text-xs sm:text-sm font-semibold text-gray-900 mb-3 sm:mb-4">
-                  Product Metafields
-                </h3>
-                <div className="space-y-2 sm:space-y-3">
-                  <EditableInlineField
-                    label="Product Code"
-                    editing={isEditing}
-                    value={
-                      isEditing && productData.metafields.productCode === "—"
-                        ? ""
-                        : productData.metafields.productCode
-                    }
-                    onChange={(v) =>
-                      applyBatchUpdate(safeActiveTab, (b) => {
-                        b.product_code = v;
-                      })
-                    }
-                  />
-                  <div>
-                    <span className="text-gray-500 block mb-1 text-xs">
-                      Fabric
-                    </span>
-                    {isEditing && canEdit ? (
-                      <SearchableSelect
-                        className={skuPriceInputClass}
-                        placeholder="Select fabric"
-                        options={catalog.fabric}
-                        value={displayFieldValue(productData.metafields.fabric)}
-                        onValueChange={(v) =>
-                          applyBatchUpdate(safeActiveTab, (b) => {
-                            b.fabric = v;
-                            ensureNestedObject(b, "listing").fabric = v;
-                          })
-                        }
-                      />
-                    ) : (
-                      <p className="text-xs sm:text-sm text-gray-900">
-                        {productData.metafields.fabric}
-                      </p>
-                    )}
-                  </div>
-                  {(
-                    [
-                      ["Chest Width", "chest_width", "chestWidth"],
-                      ["Back Length", "back_length", "backLength"],
-                      ["Waist Width", "waist_width", "waistWidth"],
-                      ["Sleeve (body) length", "sleeve_length", "sleeveLength"],
-                      ["Under Bust", "under_bust", "underBust"],
-                      ["Dress Length", "dress_length", "dressLength"],
-                    ] as const
-                  ).map(([label, base, mfKey]) =>
-                    isEditing ? (
-                      <EditableInlineField
-                        key={base}
-                        label={`${label} (number)`}
-                        editing
-                        value={getDimInputValue(dimensions, base)}
-                        onChange={(v) =>
-                          applyBatchUpdate(safeActiveTab, (b) => {
-                            setDimInputValue(b, base, v);
-                          })
-                        }
-                      />
-                    ) : (
-                      <div key={base}>
-                        <label className="block text-xs text-gray-500 mb-1">
-                          {label}
-                        </label>
-                        <p className="text-xs sm:text-sm text-gray-900">
-                          {
-                            productData.metafields[
-                              mfKey as keyof typeof productData.metafields
-                            ]
-                          }
-                        </p>
-                      </div>
-                    ),
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Variant & Google Data & Tags */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6">
-                <h3 className="text-xs sm:text-sm font-semibold text-gray-900 mb-3 sm:mb-4">
-                  Variant & Google Data
-                </h3>
-                <div className="grid grid-cols-2 gap-x-4 sm:gap-x-8 gap-y-2 sm:gap-y-3">
-                  {isEditing ? (
-                    <>
-                      <div>
-                        <span className="text-gray-500 block mb-1 text-xs">
-                          Size
-                        </span>
-                        <SearchableSelect
-                          className={skuPriceInputClass}
-                          placeholder="Select size"
-                          options={catalog.size}
-                          value={displayFieldValue(productData.selectedSize)}
-                          onValueChange={(v) =>
-                            applyBatchUpdate(safeActiveTab, (b) => {
-                              const d = ensureNestedObject(b, "dimensions");
-                              d.selected_size = v;
-                              d.available_sizes = [v];
-                              const vd = ensureNestedObject(b, "variant_data");
-                              vd.sizes = [v];
-                            })
-                          }
-                        />
-                      </div>
-                      <div>
-                        <span className="text-gray-500 block mb-1 text-xs">
-                          Color
-                        </span>
-                        <SearchableSelect
-                          className={skuPriceInputClass}
-                          placeholder="Select color"
-                          options={catalog.color}
-                          value={displayFieldValue(productData.selectedColor)}
-                          onValueChange={(v) =>
-                            applyBatchUpdate(safeActiveTab, (b) => {
-                              b.selected_color = v;
-                              const vd = ensureNestedObject(b, "variant_data");
-                              vd.colors = v ? [v] : [];
-                            })
-                          }
-                        />
-                      </div>
-                      <div>
-                        <span className="text-gray-500 block mb-1 text-xs">
-                          Google Condition
-                        </span>
-                        <SearchableSelect
-                          className={skuPriceInputClass}
-                          placeholder="new / used"
-                          options={GOOGLE_CONDITION_OPTIONS}
-                          allowCustom={false}
-                          value={normalizeGoogleCondition(
-                            productData.variants.condition,
-                          )}
-                          onValueChange={(v) =>
-                            applyBatchUpdate(safeActiveTab, (b) => {
-                              ensureNestedObject(b, "variant_data").condition =
-                                v;
-                            })
-                          }
-                        />
-                      </div>
-                      <div>
-                        <span className="text-gray-500 block mb-1 text-xs">
-                          Feature (Wzór)
-                        </span>
-                        <SearchableSelect
-                          className={skuPriceInputClass}
-                          placeholder="Select feature"
-                          options={catalog.feature}
-                          value={displayFieldValue(productData.variants.feature)}
-                          onValueChange={(v) =>
-                            applyBatchUpdate(safeActiveTab, (b) => {
-                              ensureNestedObject(b, "variant_data").feature = v;
-                            })
-                          }
-                        />
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-1">
-                          Size
-                        </label>
-                        <p className="text-xs sm:text-sm text-gray-900">
-                          {productData.selectedSize}
-                        </p>
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-1">
-                          Color
-                        </label>
-                        <p className="text-xs sm:text-sm text-gray-900">
-                          {productData.selectedColor}
-                        </p>
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-1">
-                          Google Condition
-                        </label>
-                        <p className="text-xs sm:text-sm text-gray-900">
-                          {normalizeGoogleCondition(
-                            productData.variants.condition,
-                          )}
-                        </p>
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-1">
-                          Feature (Wzór)
-                        </label>
-                        <p className="text-xs sm:text-sm text-gray-900">
-                          {productData.variants.feature}
-                        </p>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {/* Tags */}
-              <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6">
-                <h3 className="text-xs sm:text-sm font-semibold text-gray-900 mb-3 sm:mb-4">
-                  Tags
-                </h3>
-                {isEditing ? (
-                  <EditableTextBlock
-                    label="Tags (comma-separated)"
-                    editing
-                    multiline
-                    rows={3}
-                    value={productData.tags.join(", ")}
-                    onChange={(v) =>
-                      applyBatchUpdate(safeActiveTab, (b) => {
-                        const arr = parseListFromDelimited(v);
-                        b.tags = arr;
-                        ensureNestedObject(b, "listing").tags = arr;
-                        b.seo_tags = arr;
-                      })
-                    }
-                  />
-                ) : (
-                  <div className="flex flex-wrap gap-2">
-                    {productData.tags.map((tag, index) => (
-                      <span
-                        key={`${tag}-${index}`}
-                        className="px-2 sm:px-3 py-1 bg-gray-100 text-gray-700 text-xs rounded-md">
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
+            <ProductListingPanel
+              compact
+              showImages={false}
+              showActionButtons={false}
+              showSkuPrice={false}
+              productData={productData}
+              isEditing={isEditing}
+              canEdit={canEdit}
+              dimensions={dimensions}
+              sku={sku}
+              price={price}
+              onSkuChange={(v) =>
+                setSkuByTab((prev) => ({ ...prev, [safeActiveTab]: v }))
+              }
+              onPriceChange={(v) =>
+                setPriceByTab((prev) => ({ ...prev, [safeActiveTab]: v }))
+              }
+              onBatchUpdate={(updater) =>
+                applyBatchUpdate(safeActiveTab, updater)
+              }
+              documentId={localPayload?.document?.id}
+              awaitFabricFeatureSelection
+            />
 
             {/* Storage & Automation & SKU and Price  */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

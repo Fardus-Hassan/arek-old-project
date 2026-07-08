@@ -11,6 +11,7 @@ import {
   clearGeneratedDocument,
   saveGeneratedDocument,
 } from "@/lib/generated-document-storage";
+import { markFabricFeaturePending } from "@/lib/fabric-feature-pending";
 import { normalizeDocumentApiData } from "@/lib/document-api-helpers";
 import { mapGarmentOptionToApi } from "@/lib/garment-feature-map";
 import { DEFAULT_GROUP_FEATURE_IDS, DEFAULT_OUTPUT_LANGUAGE } from "./feature-options";
@@ -228,6 +229,7 @@ const HeroSection = () => {
         res.data,
       );
       saveGeneratedDocument(document, generatedImageIds, language);
+      markFabricFeaturePending(document.id);
       sessionStorage.setItem("generatedDocumentId", document.id);
       sessionStorage.removeItem("generationStartedAt");
       toast.success(res.message || "Generation started");

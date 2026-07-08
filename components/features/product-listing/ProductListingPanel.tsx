@@ -8,6 +8,7 @@ import {
   EditableTextBlock,
 } from "@/components/features/ai-result/EditableTextBlock";
 import { SearchableSelect } from "@/components/shared/SearchableSelect";
+import { SearchableMultiSelect } from "@/components/shared/SearchableMultiSelect";
 import {
   GenderDisplayValue,
   GenderRadioField,
@@ -39,6 +40,23 @@ import {
   type OutputLanguage,
 } from "@/lib/feature-catalog";
 import { useFeatureCatalogOptions } from "@/lib/hooks/useFeatureCatalogOptions";
+import { joinMultiValues } from "@/lib/multi-value-string";
+import {
+  brandValues,
+  categoryValues,
+  colorValues,
+  conditionValues,
+  displayMultiValue,
+  fabricValues,
+  featureValues,
+  sizeValues,
+} from "@/lib/catalog-field-values";
+import {
+  clearFabricPending,
+  clearFeaturePending,
+  isFabricPending,
+  isFeaturePending,
+} from "@/lib/fabric-feature-pending";
 import { skuPriceInputClass } from "./product-listing-ui";
 
 export type ProductListingPanelProps = {
@@ -55,11 +73,14 @@ export type ProductListingPanelProps = {
   onSelectedImageChange?: (index: number) => void;
   showImages?: boolean;
   showActionButtons?: boolean;
+  showSkuPrice?: boolean;
   onDownload?: () => void;
   onSaveToDrive?: () => void;
   isSavingCsv?: boolean;
   compact?: boolean;
   initialOptionsLanguage?: OutputLanguage;
+  documentId?: string;
+  awaitFabricFeatureSelection?: boolean;
 };
 
 export function ProductListingPanel({
@@ -76,27 +97,64 @@ export function ProductListingPanel({
   onSelectedImageChange,
   showImages = true,
   showActionButtons = true,
+  showSkuPrice = true,
   onDownload,
   onSaveToDrive,
   isSavingCsv = false,
   compact = false,
   initialOptionsLanguage,
+  documentId,
+  awaitFabricFeatureSelection = false,
 }: ProductListingPanelProps) {
   const [optionsLanguage, setOptionsLanguage] = useState<OutputLanguage>(
     () => initialOptionsLanguage ?? readGenerationLanguage(),
   );
   const { catalog } = useFeatureCatalogOptions(optionsLanguage);
 
+  const fabricPending =
+    awaitFabricFeatureSelection && isFabricPending(documentId);
+  const featurePending =
+    awaitFabricFeatureSelection && isFeaturePending(documentId);
+
   const maxImageIndex = Math.max(0, productData.images.length - 1);
   const safeSelectedImage = Math.min(selectedImage, maxImageIndex);
 
   const showSkuPriceSection =
-    canEdit ||
-    isEditing ||
-    sku.trim().length > 0 ||
-    price.trim().length > 0;
+    showSkuPrice &&
+    (canEdit ||
+      isEditing ||
+      sku.trim().length > 0 ||
+      price.trim().length > 0);
 
   const applyBatchUpdate = onBatchUpdate;
+
+  const onFabricChange = (vals: string[]) => {
+    const joined = joinMultiValues(vals);
+    applyBatchUpdate((b) => {
+      b.fabric = joined;
+      ensureNestedObject(b, "listing").fabric = joined;
+    });
+    if (vals.length > 0) clearFabricPending(documentId);
+  };
+
+  const onFeatureChange = (vals: string[]) => {
+    const joined = joinMultiValues(vals);
+    applyBatchUpdate((b) => {
+      ensureNestedObject(b, "variant_data").feature = joined;
+    });
+    if (vals.length > 0) clearFeaturePending(documentId);
+  };
+
+  const onSizeChange = (vals: string[]) => {
+    const joined = joinMultiValues(vals);
+    applyBatchUpdate((b) => {
+      const d = ensureNestedObject(b, "dimensions");
+      d.selected_size = joined;
+      d.available_sizes = vals;
+      const vd = ensureNestedObject(b, "variant_data");
+      vd.sizes = vals;
+    });
+  };
 
   return (
     <div
@@ -266,28 +324,16 @@ export function ProductListingPanel({
             <div>
               <span className="text-gray-500 block mb-1 text-xs">Size</span>
               {isEditing && canEdit ? (
-                <SearchableSelect
+                <SearchableMultiSelect
                   className={skuPriceInputClass}
-                  placeholder="Select size"
+                  placeholder="Select sizes"
                   options={catalog.size}
-                  value={displayFieldValue(
-                    dimensions?.selected_size != null
-                      ? String(dimensions.selected_size)
-                      : productData.selectedSize,
-                  )}
-                  onValueChange={(v) =>
-                    applyBatchUpdate((b) => {
-                      const d = ensureNestedObject(b, "dimensions");
-                      d.selected_size = v;
-                      d.available_sizes = [v];
-                      const vd = ensureNestedObject(b, "variant_data");
-                      vd.sizes = [v];
-                    })
-                  }
+                  values={sizeValues(productData)}
+                  onValuesChange={onSizeChange}
                 />
               ) : (
                 <p className="text-xs sm:text-sm text-gray-900">
-                  {productData.selectedSize}
+                  {displayMultiValue(productData.selectedSize)}
                 </p>
               )}
             </div>
@@ -303,91 +349,132 @@ export function ProductListingPanel({
               />
             </div>
           )}
-          <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6">
-            <h3 className="text-xs sm:text-sm font-semibold text-gray-900 mb-3 sm:mb-4">
-              Product Details
-            </h3>
-            <div className="space-y-2 sm:space-y-3">
-              <div>
-                <span className="text-gray-500 block mb-1 text-xs">Category</span>
-                {isEditing && canEdit ? (
-                  <SearchableSelect
-                    className={skuPriceInputClass}
-                    placeholder="Select category"
-                    options={catalog.category}
-                    value={displayFieldValue(productData.details.category)}
-                    onValueChange={(v) =>
-                      applyBatchUpdate((b) => {
-                        ensureNestedObject(b, "product_details").category = v;
-                      })
-                    }
-                  />
-                ) : (
-                  <p className="text-xs sm:text-sm text-gray-900">
-                    {productData.details.category}
-                  </p>
-                )}
+          <div className="flex flex-col gap-4">
+            <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6">
+              <h3 className="text-xs sm:text-sm font-semibold text-gray-900 mb-3 sm:mb-4">
+                Product Details
+              </h3>
+              <div className="space-y-2 sm:space-y-3">
+                <div>
+                  <span className="text-gray-500 block mb-1 text-xs">
+                    Category
+                  </span>
+                  {isEditing && canEdit ? (
+                    <SearchableMultiSelect
+                      className={skuPriceInputClass}
+                      placeholder="Select categories"
+                      options={catalog.category}
+                      values={categoryValues(productData)}
+                      onValuesChange={(vals) =>
+                        applyBatchUpdate((b) => {
+                          ensureNestedObject(b, "product_details").category =
+                            joinMultiValues(vals);
+                        })
+                      }
+                    />
+                  ) : (
+                    <p className="text-xs sm:text-sm text-gray-900">
+                      {displayMultiValue(productData.details.category)}
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <span className="text-gray-500 block mb-1 text-xs">Brand</span>
+                  {isEditing && canEdit ? (
+                    <SearchableMultiSelect
+                      className={skuPriceInputClass}
+                      placeholder="Select brands"
+                      options={catalog.brand}
+                      values={brandValues(productData)}
+                      onValuesChange={(vals) =>
+                        applyBatchUpdate((b) => {
+                          ensureNestedObject(b, "product_details").brand =
+                            joinMultiValues(vals);
+                        })
+                      }
+                    />
+                  ) : (
+                    <p className="text-xs sm:text-sm text-gray-900">
+                      {displayMultiValue(productData.details.brand)}
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <span className="text-gray-500 block mb-1 text-xs">
+                    Condition (Stan)
+                  </span>
+                  {isEditing && canEdit ? (
+                    <SearchableMultiSelect
+                      className={skuPriceInputClass}
+                      placeholder="Select condition"
+                      options={catalog.condition}
+                      values={conditionValues(productData)}
+                      onValuesChange={(vals) => {
+                        const joined = joinMultiValues(vals);
+                        applyBatchUpdate((b) => {
+                          b.product_condition = joined;
+                          ensureNestedObject(b, "product_details").condition =
+                            joined;
+                        });
+                      }}
+                    />
+                  ) : (
+                    <p className="text-xs sm:text-sm text-gray-900">
+                      {displayMultiValue(productData.productCondition)}
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <span className="text-gray-500 block mb-1 text-xs">Gender</span>
+                  {isEditing && canEdit ? (
+                    <GenderRadioField
+                      name="product-gender"
+                      options={catalog.gender}
+                      value={productData.details.gender}
+                      onChange={(v) =>
+                        applyBatchUpdate((b) => {
+                          ensureNestedObject(b, "product_details").gender = v;
+                        })
+                      }
+                    />
+                  ) : (
+                    <GenderDisplayValue value={productData.details.gender} />
+                  )}
+                </div>
               </div>
-              <div>
-                <span className="text-gray-500 block mb-1 text-xs">Brand</span>
-                {isEditing && canEdit ? (
-                  <SearchableSelect
-                    className={skuPriceInputClass}
-                    placeholder="Select brand"
-                    options={catalog.brand}
-                    value={displayFieldValue(productData.details.brand)}
-                    onValueChange={(v) =>
-                      applyBatchUpdate((b) => {
-                        ensureNestedObject(b, "product_details").brand = v;
-                      })
-                    }
-                  />
-                ) : (
-                  <p className="text-xs sm:text-sm text-gray-900">
-                    {productData.details.brand}
-                  </p>
-                )}
-              </div>
-              <div>
-                <span className="text-gray-500 block mb-1 text-xs">
-                  Condition (Stan)
-                </span>
-                {isEditing && canEdit ? (
-                  <SearchableSelect
-                    className={skuPriceInputClass}
-                    placeholder="Select condition"
-                    options={catalog.condition}
-                    value={displayFieldValue(productData.productCondition)}
-                    onValueChange={(v) =>
-                      applyBatchUpdate((b) => {
-                        b.product_condition = v;
-                        ensureNestedObject(b, "product_details").condition = v;
-                      })
-                    }
-                  />
-                ) : (
-                  <p className="text-xs sm:text-sm text-gray-900">
-                    {productData.productCondition}
-                  </p>
-                )}
-              </div>
-              <div>
-                <span className="text-gray-500 block mb-1 text-xs">Gender</span>
-                {isEditing && canEdit ? (
-                  <GenderRadioField
-                    name="product-gender"
-                    options={catalog.gender}
-                    value={productData.details.gender}
-                    onChange={(v) =>
-                      applyBatchUpdate((b) => {
-                        ensureNestedObject(b, "product_details").gender = v;
-                      })
-                    }
-                  />
-                ) : (
-                  <GenderDisplayValue value={productData.details.gender} />
-                )}
-              </div>
+            </div>
+
+            <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 flex-1">
+              <h3 className="text-xs sm:text-sm font-semibold text-gray-900 mb-3 sm:mb-4">
+                Tags
+              </h3>
+              {isEditing ? (
+                <EditableTextBlock
+                  label="Tags (comma-separated)"
+                  editing
+                  multiline
+                  rows={6}
+                  value={productData.tags.join(", ")}
+                  onChange={(v) =>
+                    applyBatchUpdate((b) => {
+                      const arr = parseListFromDelimited(v);
+                      b.tags = arr;
+                      ensureNestedObject(b, "listing").tags = arr;
+                      b.seo_tags = arr;
+                    })
+                  }
+                />
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {productData.tags.map((tag, index) => (
+                    <span
+                      key={`${tag}-${index}`}
+                      className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-md">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
@@ -413,21 +500,18 @@ export function ProductListingPanel({
               <div>
                 <span className="text-gray-500 block mb-1 text-xs">Fabric</span>
                 {isEditing && canEdit ? (
-                  <SearchableSelect
+                  <SearchableMultiSelect
                     className={skuPriceInputClass}
-                    placeholder="Select fabric"
+                    placeholder="Select fabrics"
                     options={catalog.fabric}
-                    value={displayFieldValue(productData.metafields.fabric)}
-                    onValueChange={(v) =>
-                      applyBatchUpdate((b) => {
-                        b.fabric = v;
-                        ensureNestedObject(b, "listing").fabric = v;
-                      })
-                    }
+                    values={fabricValues(productData, fabricPending)}
+                    onValuesChange={onFabricChange}
                   />
                 ) : (
                   <p className="text-xs sm:text-sm text-gray-900">
-                    {productData.metafields.fabric}
+                    {fabricPending
+                      ? ""
+                      : displayMultiValue(productData.metafields.fabric)}
                   </p>
                 )}
               </div>
@@ -472,159 +556,113 @@ export function ProductListingPanel({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6">
-            <h3 className="text-xs sm:text-sm font-semibold text-gray-900 mb-3 sm:mb-4">
-              Variant & Google Data
-            </h3>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-              {isEditing ? (
-                <>
-                  <div>
-                    <span className="text-gray-500 block mb-1 text-xs">
-                      Size
-                    </span>
-                    <SearchableSelect
-                      className={skuPriceInputClass}
-                      placeholder="Select size"
-                      options={catalog.size}
-                      value={displayFieldValue(productData.selectedSize)}
-                      onValueChange={(v) =>
-                        applyBatchUpdate((b) => {
-                          const d = ensureNestedObject(b, "dimensions");
-                          d.selected_size = v;
-                          d.available_sizes = [v];
-                          const vd = ensureNestedObject(b, "variant_data");
-                          vd.sizes = [v];
-                        })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <span className="text-gray-500 block mb-1 text-xs">
-                      Color
-                    </span>
-                    <SearchableSelect
-                      className={skuPriceInputClass}
-                      placeholder="Select color"
-                      options={catalog.color}
-                      value={displayFieldValue(productData.selectedColor)}
-                      onValueChange={(v) =>
-                        applyBatchUpdate((b) => {
-                          b.selected_color = v;
-                          const vd = ensureNestedObject(b, "variant_data");
-                          vd.colors = v ? [v] : [];
-                        })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <span className="text-gray-500 block mb-1 text-xs">
-                      Google Condition
-                    </span>
-                    <SearchableSelect
-                      className={skuPriceInputClass}
-                      placeholder="new / used"
-                      options={GOOGLE_CONDITION_OPTIONS}
-                      allowCustom={false}
-                      value={normalizeGoogleCondition(
-                        productData.variants.condition,
-                      )}
-                      onValueChange={(v) =>
-                        applyBatchUpdate((b) => {
-                          ensureNestedObject(b, "variant_data").condition = v;
-                        })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <span className="text-gray-500 block mb-1 text-xs">
-                      Feature (Wzór)
-                    </span>
-                    <SearchableSelect
-                      className={skuPriceInputClass}
-                      placeholder="Select feature"
-                      options={catalog.feature}
-                      value={displayFieldValue(productData.variants.feature)}
-                      onValueChange={(v) =>
-                        applyBatchUpdate((b) => {
-                          ensureNestedObject(b, "variant_data").feature = v;
-                        })
-                      }
-                    />
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">
-                      Size
-                    </label>
-                    <p className="text-xs sm:text-sm text-gray-900">
-                      {productData.selectedSize}
-                    </p>
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">
-                      Color
-                    </label>
-                    <p className="text-xs sm:text-sm text-gray-900">
-                      {productData.selectedColor}
-                    </p>
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">
-                      Google Condition
-                    </label>
-                    <p className="text-xs sm:text-sm text-gray-900">
-                          {normalizeGoogleCondition(
-                            productData.variants.condition,
-                          )}
-                    </p>
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">
-                      Feature (Wzór)
-                    </label>
-                    <p className="text-xs sm:text-sm text-gray-900">
-                      {productData.variants.feature}
-                    </p>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-
-          <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6">
-            <h3 className="text-xs sm:text-sm font-semibold text-gray-900 mb-3 sm:mb-4">
-              Tags
-            </h3>
+        <div className="bg-white border border-gray-200 rounded-lg p-5 sm:p-8">
+          <h3 className="text-sm sm:text-base font-semibold text-gray-900 mb-4 sm:mb-5">
+            Variant & Google Data
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
             {isEditing ? (
-              <EditableTextBlock
-                label="Tags (comma-separated)"
-                editing
-                multiline
-                rows={3}
-                value={productData.tags.join(", ")}
-                onChange={(v) =>
-                  applyBatchUpdate((b) => {
-                    const arr = parseListFromDelimited(v);
-                    b.tags = arr;
-                    ensureNestedObject(b, "listing").tags = arr;
-                    b.seo_tags = arr;
-                  })
-                }
-              />
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {productData.tags.map((tag, index) => (
-                  <span
-                    key={`${tag}-${index}`}
-                    className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-md">
-                    {tag}
+              <>
+                <div>
+                  <span className="text-gray-500 block mb-1.5 text-xs sm:text-sm">
+                    Size
                   </span>
-                ))}
-              </div>
+                  <SearchableMultiSelect
+                    className={skuPriceInputClass}
+                    placeholder="Select sizes"
+                    options={catalog.size}
+                    values={sizeValues(productData)}
+                    onValuesChange={onSizeChange}
+                  />
+                </div>
+                <div>
+                  <span className="text-gray-500 block mb-1.5 text-xs sm:text-sm">
+                    Color
+                  </span>
+                  <SearchableMultiSelect
+                    className={skuPriceInputClass}
+                    placeholder="Select colors"
+                    options={catalog.color}
+                    values={colorValues(productData)}
+                    onValuesChange={(vals) => {
+                      const joined = joinMultiValues(vals);
+                      applyBatchUpdate((b) => {
+                        b.selected_color = joined;
+                        const vd = ensureNestedObject(b, "variant_data");
+                        vd.colors = vals;
+                      });
+                    }}
+                  />
+                </div>
+                <div>
+                  <span className="text-gray-500 block mb-1.5 text-xs sm:text-sm">
+                    Google Condition
+                  </span>
+                  <SearchableSelect
+                    className={skuPriceInputClass}
+                    placeholder="new / used"
+                    options={GOOGLE_CONDITION_OPTIONS}
+                    allowCustom={false}
+                    value={normalizeGoogleCondition(
+                      productData.variants.condition,
+                    )}
+                    onValueChange={(v) =>
+                      applyBatchUpdate((b) => {
+                        ensureNestedObject(b, "variant_data").condition = v;
+                      })
+                    }
+                  />
+                </div>
+                <div>
+                  <span className="text-gray-500 block mb-1.5 text-xs sm:text-sm">
+                    Feature (Wzór)
+                  </span>
+                  <SearchableMultiSelect
+                    className={skuPriceInputClass}
+                    placeholder="Select features"
+                    options={catalog.feature}
+                    values={featureValues(productData, featurePending)}
+                    onValuesChange={onFeatureChange}
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                <div>
+                  <label className="block text-xs sm:text-sm text-gray-500 mb-1.5">
+                    Size
+                  </label>
+                  <p className="text-sm sm:text-base text-gray-900">
+                    {displayMultiValue(productData.selectedSize)}
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-xs sm:text-sm text-gray-500 mb-1.5">
+                    Color
+                  </label>
+                  <p className="text-sm sm:text-base text-gray-900">
+                    {displayMultiValue(productData.selectedColor)}
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-xs sm:text-sm text-gray-500 mb-1.5">
+                    Google Condition
+                  </label>
+                  <p className="text-sm sm:text-base text-gray-900">
+                    {normalizeGoogleCondition(productData.variants.condition)}
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-xs sm:text-sm text-gray-500 mb-1.5">
+                    Feature (Wzór)
+                  </label>
+                  <p className="text-sm sm:text-base text-gray-900">
+                    {featurePending
+                      ? ""
+                      : displayMultiValue(productData.variants.feature)}
+                  </p>
+                </div>
+              </>
             )}
           </div>
         </div>

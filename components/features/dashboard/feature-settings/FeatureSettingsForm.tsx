@@ -4,32 +4,23 @@ import { useEffect } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { TagListInput } from "./TagListInput";
+import ProductVendorSection from "./ProductVendorSection";
 import {
   useCreateFeatureMutation,
   useGetFeatureQuery,
   useUpdateFeatureMutation,
-  type FeatureCreatePayload,
+  type FeatureSavePayload,
 } from "@/lib/api/featureApi";
 import { getRtkQueryErrorMessage } from "@/lib/api/authApi";
 
-type FeatureFormValues = FeatureCreatePayload;
+type FeatureFormValues = FeatureSavePayload;
 
 const EMPTY_DEFAULTS: FeatureFormValues = {
   size: [],
   categoryEnglish: [],
   categoryPolish: [],
-  vendorsEnglish: [],
-  vendorPolish: [],
   fabricEnglish: [],
   fabricPolish: [],
   genderEnglish: [],
@@ -49,7 +40,6 @@ type BilingualField = {
   englishKey: keyof Pick<
     FeatureFormValues,
     | "categoryEnglish"
-    | "vendorsEnglish"
     | "fabricEnglish"
     | "genderEnglish"
     | "colorsEnglish"
@@ -59,7 +49,6 @@ type BilingualField = {
   polishKey: keyof Pick<
     FeatureFormValues,
     | "categoryPolish"
-    | "vendorPolish"
     | "fabricPolish"
     | "genderPolish"
     | "colorsPolish"
@@ -73,11 +62,6 @@ const BILINGUAL_FIELDS: BilingualField[] = [
     label: "Category",
     englishKey: "categoryEnglish",
     polishKey: "categoryPolish",
-  },
-  {
-    label: "Brand / Vendor",
-    englishKey: "vendorsEnglish",
-    polishKey: "vendorPolish",
   },
   { label: "Fabric", englishKey: "fabricEnglish", polishKey: "fabricPolish" },
   { label: "Gender", englishKey: "genderEnglish", polishKey: "genderPolish" },
@@ -108,8 +92,6 @@ export default function FeatureSettingsForm() {
       size: record.size ?? [],
       categoryEnglish: record.categoryEnglish ?? [],
       categoryPolish: record.categoryPolish ?? [],
-      vendorsEnglish: record.vendorsEnglish ?? [],
-      vendorPolish: record.vendorPolish ?? [],
       fabricEnglish: record.fabricEnglish ?? [],
       fabricPolish: record.fabricPolish ?? [],
       genderEnglish: record.genderEnglish ?? [],
@@ -162,6 +144,8 @@ export default function FeatureSettingsForm() {
         </div>
       ) : (
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+          <ProductVendorSection />
+
           <Controller
             name="size"
             control={form.control}
@@ -206,51 +190,6 @@ export default function FeatureSettingsForm() {
               </div>
             </div>
           ))}
-
-          {/* <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-xl">
-            <div className="space-y-2">
-              <Label>Published</Label>
-              <Controller
-                name="isPublished"
-                control={form.control}
-                render={({ field }) => (
-                  <Select
-                    value={field.value ? "true" : "false"}
-                    onValueChange={(v) => field.onChange(v === "true")}
-                    disabled={isSaving}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="true">True</SelectItem>
-                      <SelectItem value="false">False</SelectItem>
-                    </SelectContent>
-                  </Select>
-                )}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Status</Label>
-              <Controller
-                name="status"
-                control={form.control}
-                render={({ field }) => (
-                  <Select
-                    value={field.value}
-                    onValueChange={field.onChange}
-                    disabled={isSaving}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="active">Active</SelectItem>
-                      <SelectItem value="inactive">Inactive</SelectItem>
-                    </SelectContent>
-                  </Select>
-                )}
-              />
-            </div>
-          </div> */}
 
           <div className="flex justify-end">
             <Button

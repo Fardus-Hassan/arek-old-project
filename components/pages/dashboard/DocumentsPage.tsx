@@ -1121,6 +1121,7 @@ const DocumentsPage = () => {
                     selectedImage={selectedImage}
                     onSelectedImageChange={setSelectedImage}
                     showActionButtons={false}
+                    documentId={viewDocumentId ?? undefined}
                   />
                 ) : imageDetailsOnly && displayImageDetails ? (
                   <Section title="Image Details">
