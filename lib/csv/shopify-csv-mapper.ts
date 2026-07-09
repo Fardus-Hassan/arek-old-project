@@ -29,6 +29,27 @@ function csvMultiValueLower(raw: string | undefined | null): string {
   );
 }
 
+function titleCasePart(part: string): string {
+  const lower = part.trim().toLocaleLowerCase("pl");
+  if (!lower) return "";
+  return lower.charAt(0).toLocaleUpperCase("pl") + lower.slice(1);
+}
+
+function csvFabricParts(raw: string | undefined | null): string[] {
+  if (isPlaceholder(raw)) return [];
+  return parseMultiValues(raw).map(titleCasePart).filter(Boolean);
+}
+
+/** Skład: space-separated title-case, e.g. `Len Poliester` */
+function csvSkladFabric(raw: string | undefined | null): string {
+  return csvFabricParts(raw).join(" ");
+}
+
+/** Fabric metaobject list: semicolon without space, e.g. `Len;Poliester` */
+function csvShopifyFabric(raw: string | undefined | null): string {
+  return csvFabricParts(raw).join(";");
+}
+
 function escapeHtmlText(s: string): string {
   return s
     .replace(/&/g, "&amp;")
@@ -151,8 +172,8 @@ export function mapProductToPrimaryRow(
   const color = csvMultiValueLower(product.selectedColor);
   const googleCondition = googleConditionForShopifyCsv(product.variants.condition);
   const feature = csvMultiValue(product.variants.feature);
-  const fabric = csvMultiValue(product.metafields.fabric);
-  const fabricLower = csvMultiValueLower(product.metafields.fabric);
+  const skladFabric = csvSkladFabric(product.metafields.fabric);
+  const shopifyFabric = csvShopifyFabric(product.metafields.fabric);
   const stan = stanForShopifyCsv(
     parseMultiValues(product.productCondition)[0] ??
       product.productCondition,
@@ -203,7 +224,7 @@ export function mapProductToPrimaryRow(
     "Producent (product.metafields.custom.producent)": vendor,
     "Stan (product.metafields.custom.stan)": stan,
     "Kod produktu: (product.metafields.custom.kod_produktu_)": productCode,
-    "Skład (product.metafields.custom.sk_ad)": fabric,
+    "Skład (product.metafields.custom.sk_ad)": skladFabric,
     "Szerokość od pachy do pachy (product.metafields.custom.szeroko_od_pachy_do_pachy_)":
       extractNumericDim(product.metafields.chestWidth),
     "Długość tył (product.metafields.custom.d_ugo_ty_)": backOrDress,
@@ -214,7 +235,7 @@ export function mapProductToPrimaryRow(
     "Rozmiar pod biustem (product.metafields.custom.underbust)":
       extractNumericDim(product.metafields.underBust),
     "Wzór (product.metafields.custom.wz_r)": feature,
-    "Fabric (product.metafields.shopify.fabric)": fabricLower,
+    "Fabric (product.metafields.shopify.fabric)": shopifyFabric,
   };
 }
 
