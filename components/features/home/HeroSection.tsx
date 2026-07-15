@@ -21,7 +21,9 @@ import { BulkUploadSection } from "./BulkUploadSection";
 import { StickyFeatureBar } from "./StickyFeatureBar";
 import {
   createEmptyGroup,
+  type GroupGender,
   type GroupSlot,
+  type GroupType,
   type ImageGroup,
 } from "./image-group-types";
 import {
@@ -217,6 +219,8 @@ const HeroSection = () => {
             : DEFAULT_GROUP_FEATURE_IDS.map(mapGarmentOptionToApi),
       })),
       language,
+      gender: groups.map((g) => g.gender),
+      type: groups.map((g) => g.type),
     });
 
     try {
@@ -244,7 +248,7 @@ const HeroSection = () => {
   const canGenerate = groups.length > 0 && groups.every(isGroupComplete);
 
   return (
-    <section className="py-10 lg:py-20 px-4 sm:px-6 bg-[#f7f9fa] pb-44 sm:pb-36">
+    <section className="py-10 lg:py-20 px-4 sm:px-6 bg-[#f7f9fa] pb-48 sm:pb-40">
       <div className="max-w-7xl mx-auto flex flex-col items-center">
         <div className="text-center max-w-7xl mb-8 md:mb-12">
           <motion.h1
@@ -290,6 +294,12 @@ const HeroSection = () => {
                 }
                 onClearSlot={(slot) => handleClearSlot(group.id, slot)}
                 onSwapSlots={() => handleSwapSlots(group.id)}
+                onGenderChange={(gender) =>
+                  updateGroup(group.id, (g) => ({ ...g, gender }))
+                }
+                onTypeChange={(type) =>
+                  updateGroup(group.id, (g) => ({ ...g, type }))
+                }
               />
             </div>
           ))}
@@ -345,6 +355,16 @@ const HeroSection = () => {
         onToggleOption={toggleOption}
         language={language}
         onLanguageChange={setLanguage}
+        gender={activeGroup?.gender ?? "female"}
+        type={activeGroup?.type ?? "top"}
+        onGenderChange={(gender: GroupGender) => {
+          if (!activeGroup) return;
+          updateGroup(activeGroup.id, (g) => ({ ...g, gender }));
+        }}
+        onTypeChange={(type: GroupType) => {
+          if (!activeGroup) return;
+          updateGroup(activeGroup.id, (g) => ({ ...g, type }));
+        }}
       />
     </section>
   );

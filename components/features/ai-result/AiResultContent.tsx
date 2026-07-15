@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Download, CheckCircle, Pencil, Loader2 } from "lucide-react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { CheckCircle, Pencil, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
 import {
@@ -30,9 +30,16 @@ import {
 import {
   extractImagesBatchFromDocument,
   mapBatchItemToProductListingData,
+  type ProductImage,
   type ProductListingData,
 } from "@/lib/map-document-to-product-listing";
 import { buildShopifyProductImportCsv } from "@/lib/csv/shopify-product-csv";
+import {
+  safeCsvFilename,
+  type TabCsvEntry,
+} from "@/lib/download-product-csv";
+import { ImageOutputOrderStrip } from "@/components/features/ai-result/ImageOutputOrderStrip";
+import { CsvDownloadMenu } from "@/components/features/ai-result/CsvDownloadMenu";
 import {
   DEFAULT_SHOPIFY_PUBLISHED,
   DEFAULT_SHOPIFY_STATUS,
@@ -102,6 +109,9 @@ const FALLBACK_PRODUCT_DATA: ProductListingData = {
       sleeveLength: "7 in",
       underBust: "13 in",
       dressLength: "40 in",
+      hipWidth: "—",
+      collarCircumference: "—",
+      shoeInsertLength: "—",
     },
     storage: {
       googleDriveFolder: "/AutoList/Processed/2026-01-18",
@@ -211,16 +221,16 @@ const AiResultContent: React.FC = () => {
     editSnapshotByTabRef.current[t] = null;
   };
 
-  const handleUpdateDocument = async () => {
+  const handleUpdateDocument = async (): Promise<boolean> => {
     if (!localPayload?.document?.id) {
       toast.error("No document to update.");
-      return;
+      return false;
     }
     const doc = deepClonePayload(localPayload).document;
     const aiRaw = doc.aiGenerated;
     if (aiRaw == null || typeof aiRaw !== "object") {
       toast.error("Invalid AI payload.");
-      return;
+      return false;
     }
     const batchesForPatch = extractImagesBatchFromDocument(doc);
     const tabCountForPatch = batchesForPatch.length;
@@ -236,27 +246,27 @@ const AiResultContent: React.FC = () => {
       toast.error(
         "Missing per-image ids for this document. Generate again or reload this page.",
       );
-      return;
+      return false;
     }
     if (patchGeneratedImageId === doc.id) {
       toast.error(
         "Invalid PATCH target: image id matches document id. Check API payload storage.",
       );
-      return;
+      return false;
     }
     const activeRowForPatch = batchesForPatch[activeTabForPatch] as
       | ImageBatchRow
       | undefined;
     if (!activeRowForPatch || typeof activeRowForPatch !== "object") {
       toast.error("No images_batch row for this tab.");
-      return;
+      return false;
     }
     const imageDetails = buildImageDetailsPatchPayload(
       activeRowForPatch as Record<string, unknown>,
     );
     if (!imageDetails) {
       toast.error("This row has no valid images_batch image_index.");
-      return;
+      return false;
     }
     const skuTrim = (skuByTab[activeTabForPatch] ?? "").trim();
     const priceForApi = parsePriceForApi(priceByTab[activeTabForPatch] ?? "");
@@ -330,12 +340,15 @@ const AiResultContent: React.FC = () => {
             editSnapshotByTabRef.current = {};
           } catch {
             toast.error("Could not apply update response.");
+            return false;
           }
         }
       }
       toast.success(res.message || "Document updated.");
+      return true;
     } catch (err) {
       toast.error(getRtkQueryErrorMessage(err));
+      return false;
     }
   };
 
@@ -380,6 +393,46 @@ const AiResultContent: React.FC = () => {
   const maxImageIndex = Math.max(0, productData.images.length - 1);
   const safeSelectedImage = Math.min(selectedImage, maxImageIndex);
 
+  const handleImageReorder = (nextImages: ProductImage[]) => {
+    const selectedUrl = productData.images[safeSelectedImage]?.url;
+    const orderUrls = nextImages.map((img) => img.url).filter(Boolean);
+
+    if (selectedUrl) {
+      const newIdx = nextImages.findIndex((img) => img.url === selectedUrl);
+      if (newIdx >= 0) setSelectedImage(newIdx);
+    }
+
+    setLocalPayload((prev) => {
+      if (!prev?.document) return prev;
+      const next = deepClonePayload(prev);
+      const rows = extractImagesBatchFromDocument(next.document);
+      const row = rows[safeActiveTab];
+      if (row) row.image_output_order = orderUrls;
+      saveGeneratedDocument(next.document, next.generatedImageIds ?? []);
+      return next;
+    });
+  };
+
+  const csvEntries = useMemo((): TabCsvEntry[] => {
+    if (!localPayload?.document || batches.length === 0) return [];
+    return batches.map((batch, index) => {
+      const data = mapBatchItemToProductListingData(
+        batch,
+        localPayload.document,
+      );
+      return {
+        index,
+        product: data,
+        opts: {
+          sku: skuByTab[index] ?? "",
+          price: priceByTab[index] ?? "",
+          published: data.published,
+          shopifyStatus: data.shopifyStatus,
+        },
+      };
+    });
+  }, [batches, localPayload?.document, skuByTab, priceByTab]);
+
   const buildActiveTabCsv = () =>
     buildShopifyProductImportCsv(productData, {
       sku,
@@ -389,46 +442,26 @@ const AiResultContent: React.FC = () => {
       includeBom: true,
     });
 
-  const safeCsvTitle = () => {
-    const base =
-      (productData.title && productData.title !== "—" ? productData.title : "") ||
-      `Doc-${safeActiveTab + 1}`;
-    return base.replace(/[\\/:*?"<>|]+/g, "-").slice(0, 80);
-  };
-
-  const handleDownload = () => {
-    const csv = buildActiveTabCsv();
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${safeCsvTitle()}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  };
-
-  const handleSaveToDrive = async () => {
-    if (isSavingCsv) return;
+  const handleSaveToDrive = async (): Promise<boolean> => {
+    if (isSavingCsv) return false;
     setIsSavingCsv(true);
     try {
       const token = getAccessToken();
       if (!token) {
         toast.error("Not authenticated");
-        return;
+        return false;
       }
 
       const baseUrl =
         process.env.NEXT_PUBLIC_API_URL ?? "https://api.aisizepro.com/api/v1";
       const csv = buildActiveTabCsv();
-      const file = new File([csv], `${safeCsvTitle()}.csv`, {
+      const file = new File([csv], safeCsvFilename(productData.title, safeActiveTab), {
         type: "text/csv;charset=utf-8",
       });
 
       const form = new FormData();
       form.append("csvFile", file);
-      form.append("bodyData", JSON.stringify({ title: productData.title || safeCsvTitle() }));
+      form.append("bodyData", JSON.stringify({ title: productData.title || `Image-${safeActiveTab + 1}` }));
 
       const res = await fetch(`${baseUrl}/file-save/save-csv-to-s3`, {
         method: "POST",
@@ -448,35 +481,34 @@ const AiResultContent: React.FC = () => {
       }
 
       toast.success(json?.message || "CSV saved successfully");
+      return true;
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Failed to save CSV";
       toast.error(msg);
+      return false;
     } finally {
       setIsSavingCsv(false);
+    }
+  };
+
+  const handleUpdateAndSave = async () => {
+    if (isUpdatingDocument || isSavingCsv) return;
+    const updated = await handleUpdateDocument();
+    if (updated) {
+      await handleSaveToDrive();
     }
   };
 
   return (
     <div className="min-h-screen bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 lg:py-12">
-        {batches.length > 0 && productData.aiRunMessage && (
-          <div className="mb-4 rounded-xl border border-purple-100 bg-[#F9F1FB] px-4 py-3 text-sm text-gray-800">
-            <p className="font-medium text-[#A825C7]">
-              AI: {productData.aiRunStatus}
-            </p>
-            <p className="mt-1 text-gray-600">{productData.aiRunMessage}</p>
-            <p className="mt-2 text-xs text-gray-500">
-              Document{" "}
-              <span className="font-mono">{productData.documentId}</span>
-              {productData.catalogProductId !== "—" && (
-                <>
-                  {" "}
-                  · Product{" "}
-                  <span className="font-mono">{productData.catalogProductId}</span>
-                </>
-              )}
-            </p>
-          </div>
+        {productData.images.length > 0 && (
+          <ImageOutputOrderStrip
+            images={productData.images}
+            selectedIndex={safeSelectedImage}
+            onSelect={setSelectedImage}
+            onReorder={handleImageReorder}
+          />
         )}
 
         {/* Image Tabs */}
@@ -608,29 +640,15 @@ const AiResultContent: React.FC = () => {
                     </Button>
                   )}
                   {isEditing && (
-                    <>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-8 border-gray-200 text-gray-700"
-                        disabled={isUpdatingDocument}
-                        onClick={cancelEdit}>
-                        Cancel
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        className="h-8 bg-[#A825C7] hover:bg-purple-600 text-white"
-                        disabled={isUpdatingDocument}
-                        onClick={handleUpdateDocument}>
-                        {isUpdatingDocument ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          "Update"
-                        )}
-                      </Button>
-                    </>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 border-gray-200 text-gray-700"
+                      disabled={isUpdatingDocument || isSavingCsv}
+                      onClick={cancelEdit}>
+                      Cancel
+                    </Button>
                   )}
                 </div>
                 <div className="flex items-center gap-2 text-green-600">
@@ -745,6 +763,7 @@ const AiResultContent: React.FC = () => {
               showImages={false}
               showActionButtons={false}
               showSkuPrice={false}
+              showListingSection={false}
               productData={productData}
               isEditing={isEditing}
               canEdit={canEdit}
@@ -917,39 +936,48 @@ const AiResultContent: React.FC = () => {
                     </div>
                   </>
                 )}
+              </div>
+            </div>
 
-                {/* Action Buttons */}
-                <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
-                  {/* <Link
-                    href={"/analyzing"}
-                    className="w-full sm:w-auto flex-shrink-0 p-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-                    <svg
-                      className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 mx-auto"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                      />
-                    </svg>
-                  </Link> */}
+            {/* Action Buttons — compact width, readable text */}
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <CsvDownloadMenu
+                entries={csvEntries}
+                activeTabIndex={safeActiveTab}
+                className="w-auto"
+              />
 
+              {isEditing ? (
+                <>
                   <button
-                    onClick={handleDownload}
-                    className="w-full sm:flex-1 flex items-center justify-center gap-2 px-4  py-2  bg-[#A825C7] text-white text-xs sm:text-sm font-medium rounded-lg hover:bg-purple-500 transition-colors">
-                    <Download className="w-3 h-3 sm:w-4 sm:h-4" />
-                    Download
+                    type="button"
+                    disabled={isUpdatingDocument || isSavingCsv}
+                    onClick={cancelEdit}
+                    className="inline-flex h-9 items-center justify-center whitespace-nowrap rounded-lg border border-gray-200 bg-white px-3 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50 sm:text-sm">
+                    Cancel
                   </button>
-
                   <button
-                    onClick={handleSaveToDrive}
+                    type="button"
+                    disabled={isUpdatingDocument || isSavingCsv}
+                    onClick={() => void handleUpdateAndSave()}
+                    className="inline-flex h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg bg-[#A825C7] px-3 text-xs font-medium text-white transition-colors hover:bg-purple-500 disabled:opacity-50 sm:gap-2 sm:text-sm">
+                    {isUpdatingDocument || isSavingCsv ? (
+                      <>
+                        <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+                        {isUpdatingDocument ? "Updating…" : "Saving…"}
+                      </>
+                    ) : (
+                      "Update & Save"
+                    )}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={() => void handleSaveToDrive()}
                     disabled={isSavingCsv}
-                    className="w-full sm:flex-1 flex items-center justify-center gap-2 px-4  py-2  bg-white border border-gray-200 text-gray-700 text-xs sm:text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors">
-                    {/* Save icon */}
-                    <svg xmlns="http://www.w3.org/2000/svg" width={20} height={20} fill="none" viewBox="0 0 24 24">
+                    className="inline-flex h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-gray-200 bg-white px-3 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50 sm:gap-2 sm:text-sm">
+                    <svg xmlns="http://www.w3.org/2000/svg" width={16} height={16} fill="none" viewBox="0 0 24 24" className="shrink-0">
                       <path
                         d="M17 21H7a2 2 0 01-2-2V5a2 2 0 012-2h7.17a2 2 0 011.41.59l2.83 2.83A2 2 0 0120 7.17V19a2 2 0 01-2 2z"
                         stroke="#A825C7"
@@ -981,40 +1009,17 @@ const AiResultContent: React.FC = () => {
                     {isSavingCsv ? "Saving..." : "Save"}
                   </button>
 
-                  {canEdit && !isEditing && (
+                  {canEdit && (
                     <button
                       type="button"
                       onClick={beginEdit}
-                      className="w-full sm:flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 text-xs sm:text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors">
-                      <Pencil className="w-3 h-3 sm:w-4 sm:h-4" />
+                      className="inline-flex h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-gray-200 bg-white px-3 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50 sm:gap-2 sm:text-sm">
+                      <Pencil className="h-4 w-4 shrink-0" />
                       Edit
                     </button>
                   )}
-
-                  {isEditing && (
-                    <>
-                      <button
-                        type="button"
-                        disabled={isUpdatingDocument}
-                        onClick={cancelEdit}
-                        className="w-full sm:flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 text-xs sm:text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50">
-                        Cancel
-                      </button>
-                      <button
-                        type="button"
-                        disabled={isUpdatingDocument}
-                        onClick={handleUpdateDocument}
-                        className="w-full sm:flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-[#A825C7] text-white text-xs sm:text-sm font-medium rounded-lg hover:bg-purple-500 transition-colors disabled:opacity-50">
-                        {isUpdatingDocument ? (
-                          <Loader2 className="w-3 h-3 sm:w-4 sm:h-4 animate-spin" />
-                        ) : (
-                          "Update"
-                        )}
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
+                </>
+              )}
             </div>
           </div>
         </div>

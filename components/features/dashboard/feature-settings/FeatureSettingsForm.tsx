@@ -31,6 +31,8 @@ const EMPTY_DEFAULTS: FeatureFormValues = {
   conditionPolish: [],
   featureEnglish: [],
   featurePolish: [],
+  tagEnglish: [],
+  tagPolish: [],
   isPublished: false,
   status: "active",
 };
@@ -45,6 +47,7 @@ type BilingualField = {
     | "colorsEnglish"
     | "conditionEnglish"
     | "featureEnglish"
+    | "tagEnglish"
   >;
   polishKey: keyof Pick<
     FeatureFormValues,
@@ -54,6 +57,7 @@ type BilingualField = {
     | "colorsPolish"
     | "conditionPolish"
     | "featurePolish"
+    | "tagPolish"
   >;
 };
 
@@ -72,6 +76,7 @@ const BILINGUAL_FIELDS: BilingualField[] = [
     polishKey: "conditionPolish",
   },
   { label: "Feature", englishKey: "featureEnglish", polishKey: "featurePolish" },
+  { label: "Tags", englishKey: "tagEnglish", polishKey: "tagPolish" },
 ];
 
 export default function FeatureSettingsForm() {
@@ -102,6 +107,8 @@ export default function FeatureSettingsForm() {
       conditionPolish: record.conditionPolish ?? [],
       featureEnglish: record.featureEnglish ?? [],
       featurePolish: record.featurePolish ?? [],
+      tagEnglish: record.tagEnglish ?? [],
+      tagPolish: record.tagPolish ?? [],
       isPublished: record.isPublished ?? false,
       status: record.status ?? "active",
     });

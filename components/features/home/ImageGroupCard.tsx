@@ -3,8 +3,14 @@
 import React, { useCallback } from "react";
 import { useDropzone } from "react-dropzone";
 import { Shirt, Trash2, Upload, X } from "lucide-react";
-import type { GroupSlot, ImageGroup } from "./image-group-types";
+import type {
+  GroupGender,
+  GroupSlot,
+  GroupType,
+  ImageGroup,
+} from "./image-group-types";
 import { IMAGE_ACCEPT } from "./image-group-types";
+import { GroupGenderTypeControls } from "./GroupGenderTypeControls";
 
 type DragPayload = { groupId: string; slot: GroupSlot };
 
@@ -67,6 +73,8 @@ type ImageGroupCardProps = {
   onSlotFiles: (slot: GroupSlot, files: File[]) => void;
   onClearSlot: (slot: GroupSlot) => void;
   onSwapSlots: () => void;
+  onGenderChange: (gender: GroupGender) => void;
+  onTypeChange: (type: GroupType) => void;
 };
 
 function SlotDropzone({
@@ -284,6 +292,8 @@ export function ImageGroupCard({
   onSlotFiles,
   onClearSlot,
   onSwapSlots,
+  onGenderChange,
+  onTypeChange,
 }: ImageGroupCardProps) {
   return (
     <div
@@ -299,10 +309,25 @@ export function ImageGroupCard({
       className={`rounded-2xl border-2 bg-white p-4 sm:p-5 transition-all cursor-pointer
         ${isActive ? "border-[#A825C7] ring-2 ring-[#A825C7]/20 shadow-md" : "border-slate-200 hover:border-purple-200"}
       `}>
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm sm:text-base font-bold text-slate-900">
-          Group {index + 1}
-        </h3>
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:gap-3">
+          <h3 className="text-sm sm:text-base font-bold text-slate-900 shrink-0">
+            Group {index + 1}
+          </h3>
+          <div
+            className="min-w-0 flex-1 rounded-xl border border-slate-100 bg-slate-50/90 px-2.5 py-1.5 sm:px-3 sm:py-2"
+            onClick={(e) => e.stopPropagation()}>
+            <GroupGenderTypeControls
+              gender={group.gender}
+              type={group.type}
+              onGenderChange={onGenderChange}
+              onTypeChange={onTypeChange}
+              size="sm"
+              genderAriaLabel={`Group ${index + 1} gender`}
+              typeAriaLabel={`Group ${index + 1} type`}
+            />
+          </div>
+        </div>
         {canDelete && (
           <button
             type="button"
@@ -310,7 +335,7 @@ export function ImageGroupCard({
               e.stopPropagation();
               onDelete();
             }}
-            className="rounded-lg p-2 text-red-500 hover:bg-red-50 transition-colors"
+            className="rounded-lg p-2 text-red-500 hover:bg-red-50 transition-colors shrink-0"
             aria-label={`Delete group ${index + 1}`}>
             <Trash2 className="w-4 h-4" />
           </button>

@@ -234,6 +234,12 @@ export function mapProductToPrimaryRow(
       extractNumericDim(product.metafields.sleeveLength),
     "Rozmiar pod biustem (product.metafields.custom.underbust)":
       extractNumericDim(product.metafields.underBust),
+    "Hip Width (product.metafields.custom.hip_width)":
+      extractNumericDim(product.metafields.hipWidth),
+    "Collar Circumference (product.metafields.custom.collar_circumference)":
+      extractNumericDim(product.metafields.collarCircumference),
+    "Length of the shoe insert (product.metafields.custom.shoe_insert_length)":
+      extractNumericDim(product.metafields.shoeInsertLength),
     "Wzór (product.metafields.custom.wz_r)": feature,
     "Fabric (product.metafields.shopify.fabric)": shopifyFabric,
   };

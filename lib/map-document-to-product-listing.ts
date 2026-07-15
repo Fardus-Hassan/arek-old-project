@@ -42,6 +42,9 @@ export interface ProductMetafields {
   sleeveLength: string;
   underBust: string;
   dressLength: string;
+  hipWidth: string;
+  collarCircumference: string;
+  shoeInsertLength: string;
 }
 
 export interface StorageInfo {
@@ -94,6 +97,43 @@ function linearDim(
   if (cm != null && cm !== "") return `${cm} cm`;
   if (inchVal != null && inchVal !== "") return `${inchVal} in`;
   return "—";
+}
+
+/** Hide UI / treat as empty when placeholder or numeric zero (e.g. `0 cm`). */
+export function isZeroOrEmptyDim(raw: string | undefined | null): boolean {
+  if (raw == null) return true;
+  const t = String(raw).trim();
+  if (!t || t === "—") return true;
+  const n = Number(t.replace(/,/g, ".").replace(/[^\d.-]/g, ""));
+  return Number.isFinite(n) && n === 0;
+}
+
+/** Reorder images by saved URL list (`image_output_order`); extras append at end. */
+export function applyImageOutputOrder(
+  images: ProductImage[],
+  order: unknown,
+): ProductImage[] {
+  if (!Array.isArray(order) || order.length === 0 || images.length === 0) {
+    return images;
+  }
+  const urls = order.map((u) => String(u).trim()).filter(Boolean);
+  if (!urls.length) return images;
+
+  const byUrl = new Map(images.map((img) => [img.url, img]));
+  const ordered: ProductImage[] = [];
+  const used = new Set<string>();
+
+  for (const url of urls) {
+    const img = byUrl.get(url);
+    if (img && !used.has(url)) {
+      ordered.push(img);
+      used.add(url);
+    }
+  }
+  for (const img of images) {
+    if (!used.has(img.url)) ordered.push(img);
+  }
+  return ordered;
 }
 
 function isNonEmptyString(v: unknown): v is string {
@@ -252,8 +292,9 @@ export function mapBatchItemToProductListingData(
   const hasRulerReference =
     ruler === true ? "Yes" : ruler === false ? "No" : "—";
 
-  const images: ProductImage[] = [];
-  pushImagesFromBatch(batch, images);
+  const imagesRaw: ProductImage[] = [];
+  pushImagesFromBatch(batch, imagesRaw);
+  const images = applyImageOutputOrder(imagesRaw, batch.image_output_order);
 
   if (images.length === 0) {
     images.push({
@@ -371,6 +412,9 @@ export function mapBatchItemToProductListingData(
       sleeveLength: linearDim(d, "sleeve_length"),
       underBust: linearDim(d, "under_bust"),
       dressLength: linearDim(d, "dress_length"),
+      hipWidth: linearDim(d, "hip_width"),
+      collarCircumference: linearDim(d, "collar_circumference"),
+      shoeInsertLength: linearDim(d, "shoe_size"),
     },
     storage: {
       googleDriveFolder: "/AutoList/Processed",

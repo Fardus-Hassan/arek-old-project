@@ -24,6 +24,8 @@ export type FeatureRecord = {
   conditionPolish: string[];
   featureEnglish: string[];
   featurePolish: string[];
+  tagEnglish: string[];
+  tagPolish: string[];
   isPublished: boolean;
   status: string;
   customFields?: Record<string, unknown>;

@@ -6,6 +6,7 @@ import { adminApi } from "./api/adminApi";
 import { documentApi } from "./api/documentApi";
 import { fileSaveApi } from "./api/fileSaveApi";
 import { featureApi } from "./api/featureApi";
+import { timeZoneApi } from "./api/timeZoneApi";
 
 export const makeStore = () => {
   return configureStore({
@@ -17,6 +18,7 @@ export const makeStore = () => {
       [documentApi.reducerPath]: documentApi.reducer,
       [fileSaveApi.reducerPath]: fileSaveApi.reducer,
       [featureApi.reducerPath]: featureApi.reducer,
+      [timeZoneApi.reducerPath]: timeZoneApi.reducer,
     },
     middleware: (getDefaultMiddleware) =>
       getDefaultMiddleware().concat(
@@ -26,6 +28,7 @@ export const makeStore = () => {
         documentApi.middleware,
         fileSaveApi.middleware,
         featureApi.middleware,
+        timeZoneApi.middleware,
       ),
   });
 };

@@ -71,6 +71,9 @@ export const SHOPIFY_CUSTOM_METAFIELD_COLUMNS = [
   "Szerokość Talia (product.metafields.custom.szeroko_talia)",
   "Długość rękawa (product.metafields.custom.d_ugo_r_kawa)",
   "Rozmiar pod biustem (product.metafields.custom.underbust)",
+  "Hip Width (product.metafields.custom.hip_width)",
+  "Collar Circumference (product.metafields.custom.collar_circumference)",
+  "Length of the shoe insert (product.metafields.custom.shoe_insert_length)",
   "Wzór (product.metafields.custom.wz_r)",
   "Fabric (product.metafields.shopify.fabric)",
 ] as const;

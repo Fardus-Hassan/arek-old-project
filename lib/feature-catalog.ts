@@ -19,7 +19,8 @@ export type CatalogFieldKey =
   | "gender"
   | "color"
   | "condition"
-  | "feature";
+  | "feature"
+  | "tag";
 
 export type CatalogOptions = Record<CatalogFieldKey, readonly string[]>;
 
@@ -70,6 +71,10 @@ export function getCatalogOptions(
     ),
     feature: withFallback(
       isPolish ? record?.featurePolish : record?.featureEnglish,
+      [],
+    ),
+    tag: withFallback(
+      isPolish ? record?.tagPolish : record?.tagEnglish,
       [],
     ),
   };

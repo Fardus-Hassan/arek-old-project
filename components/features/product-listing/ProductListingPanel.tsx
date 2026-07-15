@@ -24,11 +24,15 @@ import {
 import {
   ensureNestedObject,
   getDimInputValue,
-  parseListFromDelimited,
   setDimInputValue,
   type ImageBatchRow,
 } from "@/lib/ai-result-document-helpers";
 import type { ProductListingData } from "@/lib/map-document-to-product-listing";
+import {
+  isZeroOrEmptyDim,
+  type ProductImage,
+} from "@/lib/map-document-to-product-listing";
+import { ImageOutputOrderStrip } from "@/components/features/ai-result/ImageOutputOrderStrip";
 import {
   GOOGLE_CONDITION_OPTIONS,
   STATUS_OPTIONS,
@@ -74,6 +78,8 @@ export type ProductListingPanelProps = {
   showImages?: boolean;
   showActionButtons?: boolean;
   showSkuPrice?: boolean;
+  /** Title/description/features card — hide when parent already shows preview */
+  showListingSection?: boolean;
   onDownload?: () => void;
   onSaveToDrive?: () => void;
   isSavingCsv?: boolean;
@@ -98,6 +104,7 @@ export function ProductListingPanel({
   showImages = true,
   showActionButtons = true,
   showSkuPrice = true,
+  showListingSection = true,
   onDownload,
   onSaveToDrive,
   isSavingCsv = false,
@@ -127,6 +134,17 @@ export function ProductListingPanel({
       price.trim().length > 0);
 
   const applyBatchUpdate = onBatchUpdate;
+
+  const handleImageReorder = (nextImages: ProductImage[]) => {
+    const selectedUrl = productData.images[safeSelectedImage]?.url;
+    applyBatchUpdate((b) => {
+      b.image_output_order = nextImages.map((img) => img.url).filter(Boolean);
+    });
+    if (selectedUrl && onSelectedImageChange) {
+      const newIdx = nextImages.findIndex((img) => img.url === selectedUrl);
+      if (newIdx >= 0) onSelectedImageChange(newIdx);
+    }
+  };
 
   const onFabricChange = (vals: string[]) => {
     const joined = joinMultiValues(vals);
@@ -164,72 +182,85 @@ export function ProductListingPanel({
           : "grid grid-cols-1 lg:grid-cols-5 gap-4 sm:gap-6 lg:gap-8"
       }>
       {showImages && productData.images.length > 0 && (
-        <div className={compact ? "" : "col-span-1 lg:col-span-2"}>
-          <h2 className="text-sm sm:text-base font-semibold text-gray-900 mb-3">
-            Image Outputs
-          </h2>
-          <div
-            className={
-              compact
-                ? "grid grid-cols-3 gap-2 sm:gap-3"
-                : "space-y-3 sm:space-y-4"
-            }>
-            {productData.images.map((image, index) => (
-              <div
-                key={`${image.url}-${index}`}
-                className={`bg-white border border-gray-200 rounded-lg overflow-hidden transition-all ${
-                  onSelectedImageChange ? "cursor-pointer" : ""
-                } ${
-                  safeSelectedImage === index ? "ring-2 ring-[#A825C7]" : ""
-                }`}
-                onClick={() => onSelectedImageChange?.(index)}>
+        <div className={compact ? "space-y-3" : "col-span-1 lg:col-span-2 space-y-3"}>
+          <ImageOutputOrderStrip
+            images={productData.images}
+            selectedIndex={safeSelectedImage}
+            onSelect={(index) => onSelectedImageChange?.(index)}
+            onReorder={handleImageReorder}
+          />
+          <div>
+            <h2 className="text-sm sm:text-base font-semibold text-gray-900 mb-3">
+              Image Outputs
+            </h2>
+            <div
+              className={
+                compact
+                  ? "grid grid-cols-3 gap-2 sm:gap-3"
+                  : "space-y-3 sm:space-y-4"
+              }>
+              {productData.images.map((image, index) => (
                 <div
-                  className={`relative w-full ${
-                    compact
-                      ? "aspect-[3/4] bg-white"
-                      : "aspect-3/4 min-h-[220px] sm:min-h-[280px] bg-gray-100"
-                  }`}>
-                  {image.url ? (
-                    <Image
-                      src={image.url}
-                      alt={image.label}
-                      className={compact ? "object-contain" : "object-cover"}
-                      fill
-                      sizes={
-                        compact
-                          ? "(max-width: 768px) 30vw, 200px"
-                          : "(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                      }
-                      unoptimized={
-                        image.url.includes("amazonaws.com") ||
-                        image.url.startsWith("http://")
-                      }
-                    />
-                  ) : (
-                    <div className="flex h-full items-center justify-center text-[10px] text-gray-400">
-                      No image
-                    </div>
-                  )}
-                </div>
-                <div
-                  className={`px-2 bg-white border-t border-gray-100 ${
-                    compact ? "py-1.5" : "px-3 py-2 flex items-center justify-between gap-2"
-                  }`}>
-                  <span
-                    className={`block text-gray-600 truncate ${
-                      compact ? "text-[10px] leading-tight" : "text-xs"
-                    }`}
-                    title={image.label}>
-                    {image.label}
-                  </span>
-                  {!compact && image.sku ? (
-                    <span className="text-xs text-gray-400 shrink-0">
-                      {image.sku}
+                  key={`${image.url}-${index}`}
+                  className={`relative bg-white border border-gray-200 rounded-lg overflow-hidden transition-all ${
+                    onSelectedImageChange ? "cursor-pointer" : ""
+                  } ${
+                    safeSelectedImage === index ? "ring-2 ring-[#A825C7]" : ""
+                  }`}
+                  onClick={() => onSelectedImageChange?.(index)}>
+                  <div className="absolute left-1.5 top-1.5 z-10 rounded-md bg-[#A825C7] px-1.5 py-0.5 text-[10px] font-bold text-white">
+                    #{index + 1}
+                  </div>
+                  <div
+                    className={`relative w-full ${
+                      compact
+                        ? "aspect-[3/4] bg-white"
+                        : "aspect-3/4 min-h-[220px] sm:min-h-[280px] bg-gray-100"
+                    }`}>
+                    {image.url ? (
+                      <Image
+                        src={image.url}
+                        alt={image.label}
+                        className={compact ? "object-contain" : "object-cover"}
+                        fill
+                        sizes={
+                          compact
+                            ? "(max-width: 768px) 30vw, 200px"
+                            : "(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                        }
+                        unoptimized={
+                          image.url.includes("amazonaws.com") ||
+                          image.url.startsWith("http://")
+                        }
+                      />
+                    ) : (
+                      <div className="flex h-full items-center justify-center text-[10px] text-gray-400">
+                        No image
+                      </div>
+                    )}
+                  </div>
+                  <div
+                    className={`px-2 bg-white border-t border-gray-100 ${
+                      compact
+                        ? "py-1.5"
+                        : "px-3 py-2 flex items-center justify-between gap-2"
+                    }`}>
+                    <span
+                      className={`block text-gray-600 truncate ${
+                        compact ? "text-[10px] leading-tight" : "text-xs"
+                      }`}
+                      title={image.label}>
+                      {image.label}
                     </span>
-                  ) : null}
+                    {!compact && image.sku ? (
+                      <span className="text-xs text-gray-400 shrink-0">
+                        {image.sku}
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
       )}
@@ -238,83 +269,85 @@ export function ProductListingPanel({
         className={
           compact ? "space-y-4" : "space-y-4 sm:space-y-6 col-span-1 lg:col-span-3"
         }>
-        <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6">
-          <h2 className="text-sm sm:text-base font-semibold text-gray-900 mb-4">
-            Product Listing
-          </h2>
-          <div className="space-y-3 sm:space-y-4">
-            <EditableTextBlock
-              label="Product Title"
-              editing={isEditing}
-              variant="title"
-              value={productData.title}
-              onChange={(v) =>
-                applyBatchUpdate((b) => {
-                  b.product_title = v;
-                  ensureNestedObject(b, "listing").title = v;
-                })
-              }
-            />
-            <EditableTextBlock
-              label="Description"
-              editing={isEditing}
-              multiline
-              rows={5}
-              value={productData.description}
-              onChange={(v) =>
-                applyBatchUpdate((b) => {
-                  b.description = v;
-                  ensureNestedObject(b, "listing").description = v;
-                })
-              }
-            />
-            {productData.selectedFeatures.length > 0 && (
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-2">
-                  Selected AI features
-                </label>
-                <div className="flex flex-wrap gap-1.5">
-                  {productData.selectedFeatures.map((f) => (
-                    <span
-                      key={f}
-                      className="rounded-md bg-purple-50 px-2 py-0.5 text-xs font-medium text-[#7c3aed]">
-                      {f}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-            {((isEditing && canEdit) || productData.keyFeatures.length > 0) &&
-              (isEditing ? (
-                <EditableTextBlock
-                  label="Key features (one per line)"
-                  editing
-                  multiline
-                  rows={6}
-                  value={productData.keyFeatures.join("\n")}
-                  onChange={(v) =>
-                    applyBatchUpdate((b) => {
-                      b.key_features = v
-                        .split("\n")
-                        .map((s) => s.trim())
-                        .filter(Boolean);
-                    })
-                  }
-                />
-              ) : (
+        {showListingSection && (
+          <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6">
+            <h2 className="text-sm sm:text-base font-semibold text-gray-900 mb-4">
+              Product Listing
+            </h2>
+            <div className="space-y-3 sm:space-y-4">
+              <EditableTextBlock
+                label="Product Title"
+                editing={isEditing}
+                variant="title"
+                value={productData.title}
+                onChange={(v) =>
+                  applyBatchUpdate((b) => {
+                    b.product_title = v;
+                    ensureNestedObject(b, "listing").title = v;
+                  })
+                }
+              />
+              <EditableTextBlock
+                label="Description"
+                editing={isEditing}
+                multiline
+                rows={5}
+                value={productData.description}
+                onChange={(v) =>
+                  applyBatchUpdate((b) => {
+                    b.description = v;
+                    ensureNestedObject(b, "listing").description = v;
+                  })
+                }
+              />
+              {productData.selectedFeatures.length > 0 && (
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-2">
-                    Key features
+                    Selected AI features
                   </label>
-                  <ul className="list-disc pl-4 text-xs sm:text-sm text-gray-700 space-y-1">
-                    {productData.keyFeatures.map((kf) => (
-                      <li key={kf}>{kf}</li>
+                  <div className="flex flex-wrap gap-1.5">
+                    {productData.selectedFeatures.map((f) => (
+                      <span
+                        key={f}
+                        className="rounded-md bg-purple-50 px-2 py-0.5 text-xs font-medium text-[#7c3aed]">
+                        {f}
+                      </span>
                     ))}
-                  </ul>
+                  </div>
                 </div>
-              ))}
+              )}
+              {((isEditing && canEdit) || productData.keyFeatures.length > 0) &&
+                (isEditing ? (
+                  <EditableTextBlock
+                    label="Key features (one per line)"
+                    editing
+                    multiline
+                    rows={6}
+                    value={productData.keyFeatures.join("\n")}
+                    onChange={(v) =>
+                      applyBatchUpdate((b) => {
+                        b.key_features = v
+                          .split("\n")
+                          .map((s) => s.trim())
+                          .filter(Boolean);
+                      })
+                    }
+                  />
+                ) : (
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-2">
+                      Key features
+                    </label>
+                    <ul className="list-disc pl-4 text-xs sm:text-sm text-gray-700 space-y-1">
+                      {productData.keyFeatures.map((kf) => (
+                        <li key={kf}>{kf}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+            </div>
           </div>
-        </div>
+        )}
 
         {((isEditing && canEdit) || productData.selectedSize !== "—") && (
           <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6">
@@ -448,21 +481,19 @@ export function ProductListingPanel({
               <h3 className="text-xs sm:text-sm font-semibold text-gray-900 mb-3 sm:mb-4">
                 Tags
               </h3>
-              {isEditing ? (
-                <EditableTextBlock
-                  label="Tags (comma-separated)"
-                  editing
-                  multiline
-                  rows={6}
-                  value={productData.tags.join(", ")}
-                  onChange={(v) =>
+              {isEditing && canEdit ? (
+                <SearchableMultiSelect
+                  className={skuPriceInputClass}
+                  placeholder="Select or type tags…"
+                  options={catalog.tag}
+                  values={productData.tags.filter((t) => t && t !== "—")}
+                  onValuesChange={(vals) => {
                     applyBatchUpdate((b) => {
-                      const arr = parseListFromDelimited(v);
-                      b.tags = arr;
-                      ensureNestedObject(b, "listing").tags = arr;
-                      b.seo_tags = arr;
-                    })
-                  }
+                      b.tags = vals;
+                      ensureNestedObject(b, "listing").tags = vals;
+                      b.seo_tags = vals;
+                    });
+                  }}
                 />
               ) : (
                 <div className="flex flex-wrap gap-2">
@@ -523,35 +554,54 @@ export function ProductListingPanel({
                   ["Sleeve (body) length", "sleeve_length", "sleeveLength"],
                   ["Under Bust", "under_bust", "underBust"],
                   ["Dress Length", "dress_length", "dressLength"],
+                  ["Hip Width", "hip_width", "hipWidth"],
+                  [
+                    "Collar Circumference",
+                    "collar_circumference",
+                    "collarCircumference",
+                  ],
+                  [
+                    "Length of the shoe insert",
+                    "shoe_size",
+                    "shoeInsertLength",
+                  ],
                 ] as const
-              ).map(([label, base, mfKey]) =>
-                isEditing ? (
-                  <EditableInlineField
-                    key={base}
-                    label={`${label} (number)`}
-                    editing
-                    value={getDimInputValue(dimensions, base)}
-                    onChange={(v) =>
-                      applyBatchUpdate((b) => {
-                        setDimInputValue(b, base, v);
-                      })
-                    }
-                  />
-                ) : (
-                  <div key={base}>
-                    <label className="block text-xs text-gray-500 mb-1">
-                      {label}
-                    </label>
-                    <p className="text-xs sm:text-sm text-gray-900">
-                      {
-                        productData.metafields[
-                          mfKey as keyof typeof productData.metafields
-                        ]
+              )
+                .filter(([, , mfKey]) => {
+                  const shown =
+                    productData.metafields[
+                      mfKey as keyof typeof productData.metafields
+                    ];
+                  return !isZeroOrEmptyDim(shown);
+                })
+                .map(([label, base, mfKey]) =>
+                  isEditing ? (
+                    <EditableInlineField
+                      key={base}
+                      label={`${label} (number)`}
+                      editing
+                      value={getDimInputValue(dimensions, base)}
+                      onChange={(v) =>
+                        applyBatchUpdate((b) => {
+                          setDimInputValue(b, base, v);
+                        })
                       }
-                    </p>
-                  </div>
-                ),
-              )}
+                    />
+                  ) : (
+                    <div key={base}>
+                      <label className="block text-xs text-gray-500 mb-1">
+                        {label}
+                      </label>
+                      <p className="text-xs sm:text-sm text-gray-900">
+                        {
+                          productData.metafields[
+                            mfKey as keyof typeof productData.metafields
+                          ]
+                        }
+                      </p>
+                    </div>
+                  ),
+                )}
             </div>
           </div>
         </div>

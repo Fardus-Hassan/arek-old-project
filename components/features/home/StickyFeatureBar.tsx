@@ -3,6 +3,8 @@
 import React from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { FEATURE_OPTIONS } from "./feature-options";
+import type { GroupGender, GroupType } from "./image-group-types";
+import { GroupGenderTypeControls } from "./GroupGenderTypeControls";
 
 type StickyFeatureBarProps = {
   groupCount: number;
@@ -12,6 +14,10 @@ type StickyFeatureBarProps = {
   onToggleOption: (id: string) => void;
   language: "English" | "Polish";
   onLanguageChange: (lang: "English" | "Polish") => void;
+  gender: GroupGender;
+  type: GroupType;
+  onGenderChange: (gender: GroupGender) => void;
+  onTypeChange: (type: GroupType) => void;
 };
 
 export function StickyFeatureBar({
@@ -22,6 +28,10 @@ export function StickyFeatureBar({
   onToggleOption,
   language,
   onLanguageChange,
+  gender,
+  type,
+  onGenderChange,
+  onTypeChange,
 }: StickyFeatureBarProps) {
   const canGoPrev = activeGroupIndex > 0;
   const canGoNext = activeGroupIndex < groupCount - 1;
@@ -29,8 +39,8 @@ export function StickyFeatureBar({
   return (
     <div className="fixed bottom-0 inset-x-0 z-50 border-t border-slate-200 bg-white/95 backdrop-blur-sm shadow-[0_-4px_20px_rgba(0,0,0,0.08)] pb-[env(safe-area-inset-bottom)]">
       <div className="max-w-5xl mx-auto px-4 py-3 space-y-2.5">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-          <div className="flex items-center justify-center sm:justify-start gap-1">
+        <div className="flex flex-col lg:flex-row lg:items-center gap-2.5 lg:gap-3">
+          <div className="flex items-center justify-center lg:justify-start gap-1 shrink-0">
             <button
               type="button"
               disabled={!canGoPrev}
@@ -52,7 +62,21 @@ export function StickyFeatureBar({
             </button>
           </div>
 
-          <div className="flex items-center justify-center sm:justify-end gap-2">
+          <div className="flex-1 flex justify-center min-w-0 px-1">
+            <div className="rounded-xl border border-slate-100 bg-slate-50/80 px-2.5 py-1.5 max-w-full overflow-x-auto">
+              <GroupGenderTypeControls
+                gender={gender}
+                type={type}
+                onGenderChange={onGenderChange}
+                onTypeChange={onTypeChange}
+                size="sm"
+                genderAriaLabel="Active group gender"
+                typeAriaLabel="Active group type"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-center lg:justify-end gap-2 shrink-0">
             <span className="text-xs font-semibold text-slate-600 whitespace-nowrap">
               Output language
             </span>

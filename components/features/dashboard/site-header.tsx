@@ -7,6 +7,7 @@ import { Separator } from "@/components/ui/separator";
 import { useSidebar } from "@/components/ui/sidebar";
 import DashboardLogo from "./DashboardLogo";
 import DashboardUserBox from "./DashboardUserBox";
+import { TimezoneSelect } from "./TimezoneSelect";
 
 export function SiteHeader() {
   const { toggleSidebar } = useSidebar();
@@ -34,7 +35,10 @@ export function SiteHeader() {
           <DashboardLogo />
         </div>
 
-        <DashboardUserBox />
+        <div className="flex items-center gap-2 sm:gap-3">
+          <TimezoneSelect />
+          <DashboardUserBox />
+        </div>
       </div>
     </header>
   );

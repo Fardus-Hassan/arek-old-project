@@ -2,6 +2,21 @@ import { DEFAULT_GROUP_FEATURE_IDS } from "./feature-options";
 
 export type GroupSlot = "front" | "back";
 
+export const GROUP_GENDERS = ["male", "female"] as const;
+export type GroupGender = (typeof GROUP_GENDERS)[number];
+
+export const GROUP_TYPES = [
+  "top",
+  "bottom",
+  "full-body",
+  "head",
+  "shoes",
+] as const;
+export type GroupType = (typeof GROUP_TYPES)[number];
+
+export const DEFAULT_GROUP_GENDER: GroupGender = "female";
+export const DEFAULT_GROUP_TYPE: GroupType = "top";
+
 export type ImageGroup = {
   id: string;
   front: File | null;
@@ -9,6 +24,8 @@ export type ImageGroup = {
   frontPreview: string | null;
   backPreview: string | null;
   selectedOptions: string[];
+  gender: GroupGender;
+  type: GroupType;
 };
 
 export const newGroupId = () =>
@@ -22,6 +39,8 @@ export function createEmptyGroup(): ImageGroup {
     frontPreview: null,
     backPreview: null,
     selectedOptions: [...DEFAULT_GROUP_FEATURE_IDS],
+    gender: DEFAULT_GROUP_GENDER,
+    type: DEFAULT_GROUP_TYPE,
   };
 }
 
