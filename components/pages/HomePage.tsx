@@ -8,9 +8,9 @@ export default function HomePage() {
       {/* here will be hero section  */}
       <HeroSection/>
       {/* how it works section  */}
-      <HowItWorks />
+      {/* <HowItWorks /> */}
       {/* features section  */}
-      <Features />
+      {/* <Features /> */}
       
 
     </div>
