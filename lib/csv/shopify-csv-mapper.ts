@@ -245,11 +245,11 @@ export function mapProductToPrimaryRow(
   };
 }
 
-/** Additional image rows — repeat Stan so metaobject validation passes on every line. */
+/** Additional image rows — Stan only on the primary (first) product row. */
 export function mapProductToImageRows(
   product: ProductListingData,
   handle: string,
-  stan: string,
+  _stan?: string,
 ): ShopifyCsvRow[] {
   const rows: ShopifyCsvRow[] = [];
   const images = product.images.filter((img) => img.url?.trim());
@@ -261,7 +261,6 @@ export function mapProductToImageRows(
       "Product image URL": img.url.trim(),
       "Image position": String(i + 1),
       "Image alt text": img.label?.trim() ?? "",
-      ...(stan ? { "Stan (product.metafields.custom.stan)": stan } : {}),
     });
   }
 

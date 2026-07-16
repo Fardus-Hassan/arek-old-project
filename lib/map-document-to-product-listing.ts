@@ -136,6 +136,59 @@ export function applyImageOutputOrder(
   return ordered;
 }
 
+function normalizePositionKey(s: string): string {
+  return s
+    .trim()
+    .toLowerCase()
+    .replace(/[-_]+/g, " ")
+    .replace(/\s+/g, " ");
+}
+
+/** Match image labels like "Virtual try-on 2" to model-position names like "Virtual try on". */
+export function labelMatchesModelPosition(
+  label: string,
+  position: string,
+): boolean {
+  const l = normalizePositionKey(label);
+  const p = normalizePositionKey(position);
+  if (!l || !p) return false;
+  if (l === p) return true;
+  return l.startsWith(`${p} `);
+}
+
+/**
+ * Order images by Feature Settings → Model Position serial.
+ * Unmatched images append at the end (stable).
+ */
+export function applyModelPositionOrder(
+  images: ProductImage[],
+  positions: unknown,
+): ProductImage[] {
+  if (!Array.isArray(positions) || positions.length === 0 || images.length === 0) {
+    return images;
+  }
+  const posList = positions
+    .map((p) => String(p).trim())
+    .filter(Boolean);
+  if (!posList.length) return images;
+
+  const remaining = [...images];
+  const ordered: ProductImage[] = [];
+
+  for (const pos of posList) {
+    for (let i = 0; i < remaining.length; ) {
+      if (labelMatchesModelPosition(remaining[i]!.label, pos)) {
+        ordered.push(remaining.splice(i, 1)[0]!);
+      } else {
+        i += 1;
+      }
+    }
+  }
+
+  ordered.push(...remaining);
+  return ordered;
+}
+
 function isNonEmptyString(v: unknown): v is string {
   return typeof v === "string" && v.length > 0;
 }
@@ -255,6 +308,8 @@ function readAiRoot(doc: SingleDocument | null | undefined) {
 export function mapBatchItemToProductListingData(
   batch: Record<string, unknown>,
   doc?: SingleDocument | null,
+  /** Feature Settings model-position serial (UI + CSV default order). */
+  modelPositions?: string[] | null,
 ): ProductListingData {
   const listing = batch.listing as
     | { title?: string; description?: string; fabric?: string; tags?: string[] }
@@ -294,7 +349,9 @@ export function mapBatchItemToProductListingData(
 
   const imagesRaw: ProductImage[] = [];
   pushImagesFromBatch(batch, imagesRaw);
-  const images = applyImageOutputOrder(imagesRaw, batch.image_output_order);
+  // Default: Model Position serial → then optional per-doc CSV reorder override.
+  const byModel = applyModelPositionOrder(imagesRaw, modelPositions);
+  const images = applyImageOutputOrder(byModel, batch.image_output_order);
 
   if (images.length === 0) {
     images.push({

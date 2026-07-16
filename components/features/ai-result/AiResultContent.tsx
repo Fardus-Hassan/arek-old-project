@@ -55,6 +55,7 @@ import {
 import { toast } from "sonner";
 import { getAccessToken } from "@/lib/auth-session";
 import { useUpdateDocumentMutation } from "@/lib/api/documentApi";
+import { useGetModelPositionQuery } from "@/lib/api/modelPositionApi";
 import { getRtkQueryErrorMessage } from "@/lib/api/authApi";
 import {
   EditableTextBlock,
@@ -160,6 +161,8 @@ const AiResultContent: React.FC = () => {
 
   const [updateDocument, { isLoading: isUpdatingDocument }] =
     useUpdateDocumentMutation();
+  const { data: modelPositionRes } = useGetModelPositionQuery();
+  const modelPositions = modelPositionRes?.data?.position ?? null;
 
   useEffect(() => {
     const loaded = loadGeneratedDocument();
@@ -371,6 +374,7 @@ const AiResultContent: React.FC = () => {
       ? mapBatchItemToProductListingData(
           batches[safeActiveTab],
           localPayload?.document ?? null,
+          modelPositions,
         )
       : FALLBACK_PRODUCT_DATA;
 
@@ -419,6 +423,7 @@ const AiResultContent: React.FC = () => {
       const data = mapBatchItemToProductListingData(
         batch,
         localPayload.document,
+        modelPositions,
       );
       return {
         index,
@@ -431,7 +436,7 @@ const AiResultContent: React.FC = () => {
         },
       };
     });
-  }, [batches, localPayload?.document, skuByTab, priceByTab]);
+  }, [batches, localPayload?.document, modelPositions, skuByTab, priceByTab]);
 
   const buildActiveTabCsv = () =>
     buildShopifyProductImportCsv(productData, {

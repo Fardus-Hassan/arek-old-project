@@ -55,6 +55,7 @@ import {
   mapBatchItemToProductListingData,
 } from "@/lib/map-document-to-product-listing";
 import { downloadProductListingCsv } from "@/lib/download-product-csv";
+import { useGetModelPositionQuery } from "@/lib/api/modelPositionApi";
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
@@ -576,6 +577,8 @@ const DocumentsPage = () => {
   const [getSingleDocument, { isFetching: isViewing }] =
     useLazyGetDocumentByIdQuery();
   const [updateDocument] = useUpdateDocumentMutation();
+  const { data: modelPositionRes } = useGetModelPositionQuery();
+  const modelPositions = modelPositionRes?.data?.position ?? null;
 
   const documents = data?.data ?? [];
   const totalItems = data?.meta?.total ?? 0;
@@ -738,8 +741,14 @@ const DocumentsPage = () => {
     return mapBatchItemToProductListingData(
       displayImageDetails,
       responseForView?.data ?? null,
+      modelPositions,
     );
-  }, [displayImageDetails, isProductDetails, responseForView?.data]);
+  }, [
+    displayImageDetails,
+    isProductDetails,
+    modelPositions,
+    responseForView?.data,
+  ]);
 
   const productDimensions =
     displayImageDetails?.dimensions &&
