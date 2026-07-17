@@ -566,42 +566,40 @@ export function ProductListingPanel({
                     "shoeInsertLength",
                   ],
                 ] as const
-              )
-                .filter(([, , mfKey]) => {
-                  const shown =
-                    productData.metafields[
-                      mfKey as keyof typeof productData.metafields
-                    ];
-                  return !isZeroOrEmptyDim(shown);
-                })
-                .map(([label, base, mfKey]) =>
-                  isEditing ? (
-                    <EditableInlineField
-                      key={base}
-                      label={`${label} (number)`}
-                      editing
-                      value={getDimInputValue(dimensions, base)}
-                      onChange={(v) =>
-                        applyBatchUpdate((b) => {
-                          setDimInputValue(b, base, v);
-                        })
-                      }
-                    />
-                  ) : (
-                    <div key={base}>
-                      <label className="block text-xs text-gray-500 mb-1">
-                        {label}
-                      </label>
-                      <p className="text-xs sm:text-sm text-gray-900">
-                        {
-                          productData.metafields[
-                            mfKey as keyof typeof productData.metafields
-                          ]
-                        }
-                      </p>
-                    </div>
-                  ),
-                )}
+              ).map(([label, base, mfKey]) => {
+                const rawShown =
+                  productData.metafields[
+                    mfKey as keyof typeof productData.metafields
+                  ];
+                // Show every field. Zero/empty renders blank (never "0").
+                const displayValue = isZeroOrEmptyDim(rawShown)
+                  ? ""
+                  : String(rawShown ?? "");
+                const rawInput = getDimInputValue(dimensions, base);
+                const inputValue = isZeroOrEmptyDim(rawInput) ? "" : rawInput;
+                return isEditing ? (
+                  <EditableInlineField
+                    key={base}
+                    label={`${label} (number)`}
+                    editing
+                    value={inputValue}
+                    onChange={(v) =>
+                      applyBatchUpdate((b) => {
+                        setDimInputValue(b, base, v);
+                      })
+                    }
+                  />
+                ) : (
+                  <div key={base}>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      {label}
+                    </label>
+                    <p className="text-xs sm:text-sm text-gray-900 min-h-[1.25rem]">
+                      {displayValue}
+                    </p>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
