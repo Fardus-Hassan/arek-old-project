@@ -43,6 +43,11 @@ import {
   isProductBatchRow,
 } from "@/components/features/product-listing/ProductListingPanel";
 import { CompactProductEditor } from "@/components/features/product-listing/CompactProductEditor";
+import { CsvShopifyUploadMenu } from "@/components/features/ai-result/CsvShopifyUploadMenu";
+import {
+  downloadProductListingCsv,
+  type TabCsvEntry,
+} from "@/lib/download-product-csv";
 import {
   ensureShopifyExportFieldsOnPatch,
   buildImageDetailsPatchPayload,
@@ -54,7 +59,6 @@ import {
 import {
   mapBatchItemToProductListingData,
 } from "@/lib/map-document-to-product-listing";
-import { downloadProductListingCsv } from "@/lib/download-product-csv";
 import { useGetModelPositionQuery } from "@/lib/api/modelPositionApi";
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
@@ -786,6 +790,22 @@ const DocumentsPage = () => {
     });
   };
 
+  const documentCsvEntries = useMemo((): TabCsvEntry[] => {
+    if (!productData) return [];
+    return [
+      {
+        index: 0,
+        product: productData,
+        opts: {
+          sku: productSku,
+          price: productPrice,
+          published: productData.published,
+          shopifyStatus: productData.shopifyStatus,
+        },
+      },
+    ];
+  }, [productData, productPrice, productSku]);
+
   return (
     <div className="w-full">
       {/* Header Section */}
@@ -1032,15 +1052,23 @@ const DocumentsPage = () => {
                 viewDocumentId && (
                   <div className="flex flex-wrap items-center gap-2 shrink-0">
                     {isProductDetails && productData && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-9"
-                        onClick={handleDownloadCsv}>
-                        <Download className="h-4 w-4 mr-1.5" />
-                        Download CSV
-                      </Button>
+                      <>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-9"
+                          onClick={handleDownloadCsv}>
+                          <Download className="h-4 w-4 mr-1.5" />
+                          Download CSV
+                        </Button>
+                        <CsvShopifyUploadMenu
+                          entries={documentCsvEntries}
+                          activeTabIndex={0}
+                          variant="outline"
+                          className="h-9"
+                        />
+                      </>
                     )}
                     {!isDetailEditing ? (
                       <Button

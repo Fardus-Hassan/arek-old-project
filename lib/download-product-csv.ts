@@ -97,3 +97,12 @@ export async function downloadTabCsvEntriesSeparately(
     await new Promise((r) => setTimeout(r, 350));
   }
 }
+
+/** Build File objects for Shopify `files` form-data upload. */
+export function tabCsvEntriesToFiles(entries: TabCsvEntry[]): File[] {
+  return entries.map((entry) => {
+    const csv = buildProductListingCsv(entry.product, entry.opts);
+    const name = safeCsvFilenameForTab(entry.product.title, entry.index);
+    return new File([csv], name, { type: "text/csv;charset=utf-8" });
+  });
+}

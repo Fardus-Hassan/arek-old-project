@@ -37,6 +37,7 @@ import {
   type TabCsvEntry,
 } from "@/lib/download-product-csv";
 import { CsvDownloadMenu } from "@/components/features/ai-result/CsvDownloadMenu";
+import { CsvShopifyUploadMenu } from "@/components/features/ai-result/CsvShopifyUploadMenu";
 import {
   DEFAULT_SHOPIFY_PUBLISHED,
   DEFAULT_SHOPIFY_STATUS,
@@ -574,7 +575,13 @@ const AiResultContent: React.FC = () => {
                 entries={csvEntries}
                 activeTabIndex={safeActiveTab}
                 variant="outline"
-                className="w-full sm:w-auto"
+                className="h-10 shrink-0"
+              />
+              <CsvShopifyUploadMenu
+                entries={csvEntries}
+                activeTabIndex={safeActiveTab}
+                variant="outline"
+                className="h-10 shrink-0"
               />
               {isEditing ? (
                 <>
@@ -582,7 +589,7 @@ const AiResultContent: React.FC = () => {
                     type="button"
                     disabled={isUpdatingDocument || isSavingCsv}
                     onClick={() => void handleUpdateAndSave()}
-                    className="inline-flex h-10 w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-[#A825C7] px-4 text-sm font-semibold text-white transition-colors hover:bg-purple-700 disabled:opacity-50">
+                    className="inline-flex h-10 min-w-0 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-[#A825C7] px-3 text-sm font-semibold text-white transition-colors hover:bg-purple-700 disabled:opacity-50">
                     {isUpdatingDocument || isSavingCsv ? (
                       <>
                         <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
@@ -596,7 +603,7 @@ const AiResultContent: React.FC = () => {
                     type="button"
                     disabled={isUpdatingDocument || isSavingCsv}
                     onClick={cancelEdit}
-                    className="inline-flex h-10 w-full items-center justify-center whitespace-nowrap rounded-xl bg-[#c81e5b] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#a9184c] disabled:opacity-50">
+                    className="inline-flex h-10 min-w-0 flex-1 items-center justify-center whitespace-nowrap rounded-xl bg-[#c81e5b] px-3 text-sm font-semibold text-white transition-colors hover:bg-[#a9184c] disabled:opacity-50">
                     Cancel
                   </button>
                 </>
@@ -606,20 +613,18 @@ const AiResultContent: React.FC = () => {
                     type="button"
                     onClick={() => void handleSaveToDrive()}
                     disabled={isSavingCsv}
-                    className="inline-flex h-10 w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-[#A825C7] px-4 text-sm font-semibold text-white transition-colors hover:bg-purple-700 disabled:opacity-50">
+                    className="inline-flex h-10 min-w-0 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-[#A825C7] px-3 text-sm font-semibold text-white transition-colors hover:bg-purple-700 disabled:opacity-50">
                     {isSavingCsv ? "Saving..." : "Save & publish"}
                   </button>
                   {canEdit ? (
                     <button
                       type="button"
                       onClick={beginEdit}
-                      className="inline-flex h-10 w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50">
+                      className="inline-flex h-10 min-w-0 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50">
                       <Pencil className="h-4 w-4 shrink-0" />
                       Edit
                     </button>
-                  ) : (
-                    <span className="hidden sm:block" />
-                  )}
+                  ) : null}
                 </>
               )}
             </>

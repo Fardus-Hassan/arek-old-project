@@ -695,7 +695,7 @@ export function CompactProductEditor({
             </div>
 
             {footer ? (
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-[auto_1fr_1fr]">
+              <div className="flex flex-nowrap items-stretch gap-2 overflow-x-auto">
                 {footer}
               </div>
             ) : null}

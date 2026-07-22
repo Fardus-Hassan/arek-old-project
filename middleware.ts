@@ -25,6 +25,11 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // API routes authenticate via Authorization header themselves.
+  if (pathname.startsWith("/api/")) {
+    return NextResponse.next();
+  }
+
   const token = request.cookies.get(AUTH_ACCESS_TOKEN_KEY)?.value;
   const role = request.cookies.get(AUTH_USER_ROLE_KEY)?.value ?? "";
 

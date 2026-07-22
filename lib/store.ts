@@ -8,6 +8,7 @@ import { fileSaveApi } from "./api/fileSaveApi";
 import { featureApi } from "./api/featureApi";
 import { timeZoneApi } from "./api/timeZoneApi";
 import { modelPositionApi } from "./api/modelPositionApi";
+import { shopifyApi } from "./api/shopifyApi";
 
 export const makeStore = () => {
   return configureStore({
@@ -21,6 +22,7 @@ export const makeStore = () => {
       [featureApi.reducerPath]: featureApi.reducer,
       [timeZoneApi.reducerPath]: timeZoneApi.reducer,
       [modelPositionApi.reducerPath]: modelPositionApi.reducer,
+      [shopifyApi.reducerPath]: shopifyApi.reducer,
     },
     middleware: (getDefaultMiddleware) =>
       getDefaultMiddleware().concat(
@@ -32,6 +34,7 @@ export const makeStore = () => {
         featureApi.middleware,
         timeZoneApi.middleware,
         modelPositionApi.middleware,
+        shopifyApi.middleware,
       ),
   });
 };
