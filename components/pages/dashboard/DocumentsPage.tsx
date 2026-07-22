@@ -41,8 +41,8 @@ import type { ApiEnvelope } from "@/lib/api/types";
 import Image from "next/image";
 import {
   isProductBatchRow,
-  ProductListingPanel,
 } from "@/components/features/product-listing/ProductListingPanel";
+import { CompactProductEditor } from "@/components/features/product-listing/CompactProductEditor";
 import {
   ensureShopifyExportFieldsOnPatch,
   buildImageDetailsPatchPayload,
@@ -1020,7 +1020,7 @@ const DocumentsPage = () => {
             setIsSavingDetail(false);
           }
         }}>
-        <DialogContent className="w-[96vw] max-w-5xl h-[85vh] overflow-hidden flex flex-col p-0">
+        <DialogContent className="flex h-[90vh] w-[96vw] max-w-6xl flex-col overflow-hidden p-0">
           <DialogHeader className="shrink-0 space-y-0 p-4 sm:p-6 pb-3 border-b border-gray-100">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:pr-10">
               <DialogTitle className="text-base sm:text-lg">
@@ -1108,8 +1108,7 @@ const DocumentsPage = () => {
             {!isViewing && responseForView && (
               <div className="space-y-3">
                 {isProductDetails && productData && displayImageDetails ? (
-                  <ProductListingPanel
-                    compact
+                  <CompactProductEditor
                     productData={productData}
                     isEditing={isDetailEditing}
                     canEdit={Boolean(viewDocumentId)}
@@ -1129,7 +1128,6 @@ const DocumentsPage = () => {
                     onBatchUpdate={applyProductBatchUpdate}
                     selectedImage={selectedImage}
                     onSelectedImageChange={setSelectedImage}
-                    showActionButtons={false}
                     documentId={viewDocumentId ?? undefined}
                   />
                 ) : imageDetailsOnly && displayImageDetails ? (

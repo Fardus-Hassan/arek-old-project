@@ -108,7 +108,9 @@ export function isZeroOrEmptyDim(raw: string | undefined | null): boolean {
   return Number.isFinite(n) && n === 0;
 }
 
-/** Reorder images by saved URL list (`image_output_order`); extras append at end. */
+/** Reorder images by saved URL list (`image_output_order`).
+ * When an explicit order exists, it is authoritative (deleted images stay out).
+ */
 export function applyImageOutputOrder(
   images: ProductImage[],
   order: unknown,
@@ -130,10 +132,22 @@ export function applyImageOutputOrder(
       used.add(url);
     }
   }
-  for (const img of images) {
-    if (!used.has(img.url)) ordered.push(img);
-  }
   return ordered;
+}
+
+/** Drop URLs marked excluded from listing/CSV (`image_output_excluded`). */
+export function applyImageOutputExcluded(
+  images: ProductImage[],
+  excluded: unknown,
+): ProductImage[] {
+  if (!Array.isArray(excluded) || excluded.length === 0 || images.length === 0) {
+    return images;
+  }
+  const skip = new Set(
+    excluded.map((u) => String(u).trim()).filter(Boolean),
+  );
+  if (skip.size === 0) return images;
+  return images.filter((img) => !skip.has(img.url));
 }
 
 function normalizePositionKey(s: string): string {
@@ -351,7 +365,11 @@ export function mapBatchItemToProductListingData(
   pushImagesFromBatch(batch, imagesRaw);
   // Default: Model Position serial → then optional per-doc CSV reorder override.
   const byModel = applyModelPositionOrder(imagesRaw, modelPositions);
-  const images = applyImageOutputOrder(byModel, batch.image_output_order);
+  const ordered = applyImageOutputOrder(byModel, batch.image_output_order);
+  const images = applyImageOutputExcluded(
+    ordered,
+    batch.image_output_excluded,
+  );
 
   if (images.length === 0) {
     images.push({

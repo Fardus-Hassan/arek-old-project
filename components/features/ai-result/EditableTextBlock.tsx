@@ -17,6 +17,7 @@ type EditableTextBlockProps = {
   variant?: Variant;
   placeholder?: string;
   rows?: number;
+  dense?: boolean;
 };
 
 export function EditableTextBlock({
@@ -28,15 +29,32 @@ export function EditableTextBlock({
   variant = "body",
   placeholder,
   rows = 4,
+  dense = false,
 }: EditableTextBlockProps) {
   const readClass =
     variant === "title"
       ? "text-xs sm:text-sm font-semibold text-gray-900"
       : "text-xs sm:text-sm text-gray-700 leading-relaxed";
 
+  const controlClass = dense
+    ? cn(
+        "w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-purple-300 focus:ring-2 focus:ring-purple-200",
+        multiline
+          ? cn(
+              "resize-y py-2",
+              rows >= 7 ? "min-h-[11rem]" : "min-h-[5.5rem]",
+            )
+          : "h-9",
+      )
+    : inputClassName;
+
   return (
     <div>
-      <label className="block text-xs font-medium text-gray-500 mb-2">
+      <label
+        className={cn(
+          "block font-medium text-slate-500",
+          dense ? "mb-1 text-xs" : "mb-2 text-xs",
+        )}>
         {label}
       </label>
       {editing ? (
@@ -46,7 +64,7 @@ export function EditableTextBlock({
             onChange={(e) => onChange(e.target.value)}
             rows={rows}
             placeholder={placeholder}
-            className={inputClassName}
+            className={controlClass}
           />
         ) : (
           <input
@@ -54,7 +72,7 @@ export function EditableTextBlock({
             value={value}
             onChange={(e) => onChange(e.target.value)}
             placeholder={placeholder}
-            className={inputClassName}
+            className={controlClass}
           />
         )
       ) : (

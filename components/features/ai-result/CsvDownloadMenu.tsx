@@ -27,6 +27,8 @@ type CsvDownloadMenuProps = {
   entries: TabCsvEntry[];
   activeTabIndex: number;
   className?: string;
+  /** outline matches client mockup action row */
+  variant?: "primary" | "outline";
 };
 
 function entryLabel(entry: TabCsvEntry): string {
@@ -41,6 +43,7 @@ export function CsvDownloadMenu({
   entries,
   activeTabIndex,
   className,
+  variant = "primary",
 }: CsvDownloadMenuProps) {
   const [open, setOpen] = React.useState(false);
   const [selected, setSelected] = React.useState<Set<number>>(() => new Set());
@@ -105,18 +108,28 @@ export function CsvDownloadMenu({
 
   if (tabCount === 0) return null;
 
+  const isOutline = variant === "outline";
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <div
         className={cn(
-          "inline-flex h-9 overflow-hidden rounded-lg border border-[#A825C7]/30 shadow-sm",
+          "inline-flex h-10 overflow-hidden rounded-xl border shadow-sm",
+          isOutline
+            ? "border-slate-200 bg-white"
+            : "border-[#A825C7]/30",
           className,
         )}>
         <button
           type="button"
           disabled={busy}
           onClick={() => void runDownload(activeEntry ? [activeEntry] : [], "single")}
-          className="inline-flex items-center justify-center gap-1.5 bg-[#A825C7] px-2.5 text-xs font-medium text-white transition-colors hover:bg-purple-600 disabled:opacity-60 sm:gap-2 sm:px-3 sm:text-sm">
+          className={cn(
+            "inline-flex flex-1 items-center justify-center gap-1.5 px-3 text-sm font-semibold transition-colors disabled:opacity-60",
+            isOutline
+              ? "bg-white text-slate-800 hover:bg-slate-50"
+              : "bg-[#A825C7] text-white hover:bg-purple-600",
+          )}>
           {busy ? (
             <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
           ) : (
@@ -129,7 +142,12 @@ export function CsvDownloadMenu({
             type="button"
             disabled={busy}
             aria-label="More download options"
-            className="flex h-full w-8 shrink-0 items-center justify-center border-l border-purple-500/40 bg-[#A825C7] text-white transition-colors hover:bg-purple-600 disabled:opacity-60">
+            className={cn(
+              "flex h-full w-9 shrink-0 items-center justify-center border-l transition-colors disabled:opacity-60",
+              isOutline
+                ? "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                : "border-purple-500/40 bg-[#A825C7] text-white hover:bg-purple-600",
+            )}>
             <ChevronDown className="h-4 w-4" />
           </button>
         </PopoverTrigger>

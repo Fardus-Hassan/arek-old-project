@@ -23,6 +23,50 @@ export function ensureNestedObject(
   return cur as Record<string, unknown>;
 }
 
+/**
+ * Remove an image URL from the batch row so it stays gone after PATCH + reload.
+ * Clears matching source fields/arrays (not only a soft exclude list).
+ */
+export function removeImageUrlFromBatchRow(
+  batch: ImageBatchRow,
+  url: string,
+): void {
+  const target = url.trim();
+  if (!target) return;
+
+  const clearScalar = (key: string) => {
+    const cur = batch[key];
+    if (typeof cur === "string" && cur.trim() === target) {
+      batch[key] = "";
+    }
+  };
+  clearScalar("background_removed_url");
+  clearScalar("backpart_image");
+  clearScalar("image_diagram_url");
+
+  const filterUrlArray = (key: string) => {
+    const cur = batch[key];
+    if (!Array.isArray(cur)) return;
+    batch[key] = cur.filter((u) => String(u).trim() !== target);
+  };
+  filterUrlArray("virtual_tryon_urls");
+  filterUrlArray("model_urls");
+  filterUrlArray("mannequin_urls");
+
+  if (Array.isArray(batch.image_output_order)) {
+    batch.image_output_order = (batch.image_output_order as unknown[])
+      .map(String)
+      .filter((u) => u.trim() !== target);
+  }
+
+  const prevExcluded = Array.isArray(batch.image_output_excluded)
+    ? (batch.image_output_excluded as unknown[]).map(String)
+    : [];
+  if (!prevExcluded.includes(target)) {
+    batch.image_output_excluded = [...prevExcluded, target];
+  }
+}
+
 /** Prefer cm key if present, else in, else default to cm for new values. */
 function dimensionValueKey(
   dim: Record<string, unknown> | undefined,

@@ -94,6 +94,8 @@ export type GenderRadioFieldProps = {
   disabled?: boolean;
   name?: string;
   className?: string;
+  /** Segmented control style (Male / Female / Unisex) like client mockup */
+  variant?: "radio" | "segmented";
 };
 
 export function GenderRadioField({
@@ -103,11 +105,46 @@ export function GenderRadioField({
   disabled = false,
   name = "gender",
   className,
+  variant = "radio",
 }: GenderRadioFieldProps) {
   const radioOptions = useMemo(
     () => buildGenderRadioOptions(options, value),
     [options, value],
   );
+
+  if (variant === "segmented") {
+    return (
+      <div
+        className={cn(
+          "inline-flex w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-100/80 p-1",
+          className,
+        )}
+        role="radiogroup"
+        aria-label="Gender">
+        {radioOptions.map((option) => {
+          const active = genderValuesMatch(option.value, value);
+          return (
+            <button
+              key={`${option.value}-${option.isAi ? "ai" : "opt"}`}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              disabled={disabled}
+              onClick={() => onChange?.(option.value)}
+              className={cn(
+                "flex-1 rounded-lg px-3 py-2 text-xs font-semibold transition-all sm:text-sm",
+                active
+                  ? "bg-white text-slate-900 shadow-sm ring-1 ring-purple-200"
+                  : "bg-transparent text-slate-500 hover:text-slate-700",
+                disabled && "cursor-not-allowed opacity-60",
+              )}>
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
 
   return (
     <div className={cn("flex flex-wrap gap-4", className)}>

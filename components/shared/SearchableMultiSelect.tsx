@@ -45,6 +45,7 @@ export function SearchableMultiSelect({
   const [query, setQuery] = React.useState("");
   const inputRef = React.useRef<HTMLInputElement>(null);
   const contentRef = React.useRef<HTMLDivElement>(null);
+  const anchorRef = React.useRef<HTMLDivElement>(null);
 
   const filtered = React.useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -86,12 +87,6 @@ export function SearchableMultiSelect({
     onValuesChange(values.filter((_, i) => i !== index));
   };
 
-  const openList = () => {
-    if (disabled) return;
-    setOpen(true);
-    window.setTimeout(() => inputRef.current?.focus(), 0);
-  };
-
   const q = query.trim();
   const showCustomRow =
     allowCustom &&
@@ -109,6 +104,7 @@ export function SearchableMultiSelect({
       }}>
       <PopoverAnchor asChild>
         <div
+          ref={anchorRef}
           className={cn(
             "relative flex min-h-10 w-full items-center gap-1 rounded-lg border border-gray-200 bg-white pl-2.5 pr-8 py-1.5 transition-colors",
             open && "ring-2 ring-purple-500 border-transparent",
@@ -116,7 +112,22 @@ export function SearchableMultiSelect({
             !disabled && "hover:border-gray-300 cursor-text",
             className,
           )}
-          onClick={openList}>
+          onClick={(e) => {
+            if (disabled) return;
+            const target = e.target as HTMLElement;
+            if (target.closest("button[aria-label^='Remove']")) return;
+            // Toggle — content onInteractOutside ignores anchor clicks so we
+            // don't get dismiss+reopen in the same click.
+            setOpen((prev) => {
+              const next = !prev;
+              if (next) {
+                window.setTimeout(() => inputRef.current?.focus(), 0);
+              } else {
+                setQuery("");
+              }
+              return next;
+            });
+          }}>
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
             {values.map((v, i) => (
               <span
@@ -148,7 +159,10 @@ export function SearchableMultiSelect({
                 setQuery(e.target.value);
                 setOpen(true);
               }}
-              onFocus={openList}
+              onClick={(e) => e.stopPropagation()}
+              onFocus={() => {
+                if (!disabled) setOpen(true);
+              }}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   e.preventDefault();
@@ -187,14 +201,19 @@ export function SearchableMultiSelect({
             className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 disabled:pointer-events-none"
             onMouseDown={(e) => {
               e.preventDefault();
+              e.stopPropagation();
               if (disabled) return;
-              if (open) {
-                setOpen(false);
-                setQuery("");
-              } else {
-                openList();
-              }
+              setOpen((prev) => {
+                const next = !prev;
+                if (next) {
+                  window.setTimeout(() => inputRef.current?.focus(), 0);
+                } else {
+                  setQuery("");
+                }
+                return next;
+              });
             }}
+            onClick={(e) => e.stopPropagation()}
             aria-label="Toggle options">
             <ChevronDown
               className={cn(
@@ -211,7 +230,12 @@ export function SearchableMultiSelect({
         align="start"
         sideOffset={4}
         onOpenAutoFocus={(e) => e.preventDefault()}
-        onCloseAutoFocus={(e) => e.preventDefault()}>
+        onCloseAutoFocus={(e) => e.preventDefault()}
+        onInteractOutside={(e) => {
+          if (anchorRef.current?.contains(e.target as Node)) {
+            e.preventDefault();
+          }
+        }}>
         <div
           data-lenis-prevent
           className="max-h-56 overflow-y-auto overscroll-contain p-1"

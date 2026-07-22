@@ -24,6 +24,7 @@ import {
 import {
   ensureNestedObject,
   getDimInputValue,
+  removeImageUrlFromBatchRow,
   setDimInputValue,
   type ImageBatchRow,
 } from "@/lib/ai-result-document-helpers";
@@ -143,6 +144,28 @@ export function ProductListingPanel({
     if (selectedUrl && onSelectedImageChange) {
       const newIdx = nextImages.findIndex((img) => img.url === selectedUrl);
       if (newIdx >= 0) onSelectedImageChange(newIdx);
+      else onSelectedImageChange(0);
+    }
+  };
+
+  const handleImageRemove = (index: number) => {
+    const removed = productData.images[index];
+    if (!removed?.url) return;
+    const nextImages = productData.images.filter((_, i) => i !== index);
+    const selectedUrl = productData.images[safeSelectedImage]?.url;
+    applyBatchUpdate((b) => {
+      removeImageUrlFromBatchRow(b, removed.url);
+      b.image_output_order = nextImages.map((img) => img.url).filter(Boolean);
+    });
+    if (onSelectedImageChange) {
+      if (selectedUrl && selectedUrl !== removed.url) {
+        const newIdx = nextImages.findIndex((img) => img.url === selectedUrl);
+        onSelectedImageChange(newIdx >= 0 ? newIdx : 0);
+      } else {
+        onSelectedImageChange(
+          Math.min(index, Math.max(0, nextImages.length - 1)),
+        );
+      }
     }
   };
 
@@ -188,6 +211,8 @@ export function ProductListingPanel({
             selectedIndex={safeSelectedImage}
             onSelect={(index) => onSelectedImageChange?.(index)}
             onReorder={handleImageReorder}
+            onRemove={isEditing && canEdit ? handleImageRemove : undefined}
+            canReorder={isEditing && canEdit}
           />
           <div>
             <h2 className="text-sm sm:text-base font-semibold text-gray-900 mb-3">
