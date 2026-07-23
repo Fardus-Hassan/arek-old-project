@@ -20,6 +20,13 @@ type CsvShopifyUploadMenuProps = {
   activeTabIndex: number;
   className?: string;
   variant?: "primary" | "outline";
+  /**
+   * Run before CSV upload (e.g. persist product).
+   * Return `false` to cancel upload.
+   */
+  onBeforeUpload?: () => Promise<boolean>;
+  /** Extra busy state while parent is saving */
+  saving?: boolean;
 };
 
 function entryLabel(entry: TabCsvEntry): string {
@@ -35,9 +42,12 @@ export function CsvShopifyUploadMenu({
   activeTabIndex,
   className,
   variant = "outline",
+  onBeforeUpload,
+  saving = false,
 }: CsvShopifyUploadMenuProps) {
   const [open, setOpen] = React.useState(false);
   const [selected, setSelected] = React.useState<Set<number>>(() => new Set());
+  const [localBusy, setLocalBusy] = React.useState(false);
   const [uploadMultipleCsv, { isLoading }] = useUploadMultipleCsvMutation();
 
   const tabCount = entries.length;
@@ -74,7 +84,12 @@ export function CsvShopifyUploadMenu({
       toast.error("Select at least one CSV to upload.");
       return;
     }
+    setLocalBusy(true);
     try {
+      if (onBeforeUpload) {
+        const ok = await onBeforeUpload();
+        if (!ok) return;
+      }
       const files = tabCsvEntriesToFiles(items);
       const res = await uploadMultipleCsv({ files }).unwrap();
       toast.success(
@@ -84,13 +99,15 @@ export function CsvShopifyUploadMenu({
       setOpen(false);
     } catch (err) {
       toast.error(getRtkQueryErrorMessage(err));
+    } finally {
+      setLocalBusy(false);
     }
   };
 
   if (tabCount === 0) return null;
 
   const isOutline = variant === "outline";
-  const busy = isLoading;
+  const busy = isLoading || localBusy || saving;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>

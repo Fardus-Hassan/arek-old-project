@@ -49,6 +49,7 @@ import { useGetModelPositionQuery } from "@/lib/api/modelPositionApi";
 import { getRtkQueryErrorMessage } from "@/lib/api/authApi";
 import { CompactProductEditor } from "@/components/features/product-listing/CompactProductEditor";
 import { stripAiFabricFeatureFromPayload } from "@/lib/fabric-feature-pending";
+import { cn } from "@/lib/utils";
 
 /** Shown when nothing is stored in localStorage yet. */
 const FALLBACK_PRODUCT_DATA: ProductListingData = {
@@ -75,8 +76,8 @@ const FALLBACK_PRODUCT_DATA: ProductListingData = {
       },
     ],
     details: {
-      category: "Women â€º Dresses",
-      brand: "Local Designer",
+      category: "",
+      brand: "",
       sleeveLength: "Short",
       dressType: "A-line",
       ageGroup: "18-35",
@@ -483,6 +484,16 @@ const AiResultContent: React.FC = () => {
     }
   };
 
+  /** Persist product before Shopify upload (edit → PATCH, then save CSV to drive). */
+  const handleSaveBeforeShopifyUpload = async (): Promise<boolean> => {
+    if (isUpdatingDocument || isSavingCsv) return false;
+    if (isEditing) {
+      const updated = await handleUpdateDocument();
+      if (!updated) return false;
+    }
+    return handleSaveToDrive();
+  };
+
   return (
     <div className="min-h-[100dvh] bg-slate-50">
       <div className="mx-auto flex max-w-[1400px] flex-col gap-3 px-3 py-3 sm:px-4 sm:py-4">
@@ -516,39 +527,6 @@ const AiResultContent: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-2 px-0.5">
-          <div className="flex items-center gap-2 text-green-600">
-            <CheckCircle className="h-3.5 w-3.5 shrink-0" />
-            <span className="text-xs font-medium sm:text-sm">
-              {sku && price
-                ? "Ready for publishing"
-                : "Complete SKU and price to publish"}
-            </span>
-          </div>
-          {canEdit && !isEditing && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-8 border-gray-200 text-gray-700"
-              onClick={beginEdit}>
-              <Pencil className="mr-1.5 h-3.5 w-3.5" />
-              Edit
-            </Button>
-          )}
-          {isEditing && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-8 border-gray-200 text-gray-700"
-              disabled={isUpdatingDocument || isSavingCsv}
-              onClick={cancelEdit}>
-              Cancel
-            </Button>
-          )}
-        </div>
-
         <CompactProductEditor
           className="w-full"
           productData={productData}
@@ -569,6 +547,44 @@ const AiResultContent: React.FC = () => {
           onImagesReorder={handleImageReorder}
           documentId={localPayload?.document?.id}
           awaitFabricFeatureSelection
+          genderToolbar={
+            <>
+              <div
+                className={cn(
+                  "flex items-center gap-1.5 text-xs font-medium",
+                  sku && price ? "text-green-600" : "text-amber-600",
+                )}>
+                <CheckCircle className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">
+                  {sku && price
+                    ? "Ready for publishing"
+                    : "Complete SKU and price to publish"}
+                </span>
+              </div>
+              {canEdit && !isEditing && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 shrink-0 border-gray-200 text-gray-700 text-xs"
+                  onClick={beginEdit}>
+                  <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                  Edit
+                </Button>
+              )}
+              {isEditing && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 shrink-0 border-gray-200 text-gray-700 text-xs"
+                  disabled={isUpdatingDocument || isSavingCsv}
+                  onClick={cancelEdit}>
+                  Cancel
+                </Button>
+              )}
+            </>
+          }
           footer={
             <>
               <CsvDownloadMenu
@@ -582,6 +598,8 @@ const AiResultContent: React.FC = () => {
                 activeTabIndex={safeActiveTab}
                 variant="outline"
                 className="h-10 shrink-0"
+                saving={isUpdatingDocument || isSavingCsv}
+                onBeforeUpload={handleSaveBeforeShopifyUpload}
               />
               {isEditing ? (
                 <>
@@ -596,7 +614,7 @@ const AiResultContent: React.FC = () => {
                         {isUpdatingDocument ? "Updating…" : "Saving…"}
                       </>
                     ) : (
-                      "Save & publish"
+                      "Save"
                     )}
                   </button>
                   <button
@@ -614,7 +632,7 @@ const AiResultContent: React.FC = () => {
                     onClick={() => void handleSaveToDrive()}
                     disabled={isSavingCsv}
                     className="inline-flex h-10 min-w-0 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-[#A825C7] px-3 text-sm font-semibold text-white transition-colors hover:bg-purple-700 disabled:opacity-50">
-                    {isSavingCsv ? "Saving..." : "Save & publish"}
+                    {isSavingCsv ? "Saving..." : "Save"}
                   </button>
                   {canEdit ? (
                     <button

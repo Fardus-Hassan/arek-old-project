@@ -676,10 +676,10 @@ const DocumentsPage = () => {
     setDetailSnapshot(null);
   };
 
-  const saveDetailEdit = async () => {
+  const saveDetailEdit = async (): Promise<boolean> => {
     if (!viewDocumentId || !detailDraft) {
       toast.error("Nothing to save.");
-      return;
+      return false;
     }
     setIsSavingDetail(true);
     try {
@@ -701,11 +701,25 @@ const DocumentsPage = () => {
       setViewResponse(refreshed);
       setIsDetailEditing(false);
       setDetailSnapshot(null);
+      return true;
     } catch (e) {
       toast.error(getRtkQueryErrorMessage(e));
+      return false;
     } finally {
       setIsSavingDetail(false);
     }
+  };
+
+  const handleSaveBeforeShopifyUpload = async (): Promise<boolean> => {
+    if (!viewDocumentId || !detailDraft) {
+      toast.error("Nothing to save.");
+      return false;
+    }
+    // Always persist current draft before Shopify upload.
+    if (isDetailEditing || detailDraft) {
+      return saveDetailEdit();
+    }
+    return true;
   };
 
   // Prevent page scroll while modal is open; scroll stays inside modal.
@@ -1067,6 +1081,8 @@ const DocumentsPage = () => {
                           activeTabIndex={0}
                           variant="outline"
                           className="h-9"
+                          saving={isSavingDetail}
+                          onBeforeUpload={handleSaveBeforeShopifyUpload}
                         />
                       </>
                     )}

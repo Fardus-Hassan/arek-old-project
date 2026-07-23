@@ -187,13 +187,13 @@ export function ProductListingPanel({
   };
 
   const onSizeChange = (vals: string[]) => {
-    const joined = joinMultiValues(vals);
+    const next = vals.slice(-1);
     applyBatchUpdate((b) => {
       const d = ensureNestedObject(b, "dimensions");
-      d.selected_size = joined;
-      d.available_sizes = vals;
+      d.selected_size = joinMultiValues(next);
+      d.available_sizes = next;
       const vd = ensureNestedObject(b, "variant_data");
-      vd.sizes = vals;
+      vd.sizes = next;
     });
   };
 
@@ -384,9 +384,10 @@ export function ProductListingPanel({
               {isEditing && canEdit ? (
                 <SearchableMultiSelect
                   className={skuPriceInputClass}
-                  placeholder="Select sizes"
+                  placeholder="Select size"
+                  selectionMode="single"
                   options={catalog.size}
-                  values={sizeValues(productData)}
+                  values={sizeValues(productData).slice(0, 1)}
                   onValuesChange={onSizeChange}
                 />
               ) : (
@@ -420,13 +421,14 @@ export function ProductListingPanel({
                   {isEditing && canEdit ? (
                     <SearchableMultiSelect
                       className={skuPriceInputClass}
-                      placeholder="Select categories"
+                      placeholder="Select category"
+                      selectionMode="single"
                       options={catalog.category}
-                      values={categoryValues(productData)}
+                      values={categoryValues(productData).slice(0, 1)}
                       onValuesChange={(vals) =>
                         applyBatchUpdate((b) => {
                           ensureNestedObject(b, "product_details").category =
-                            joinMultiValues(vals);
+                            joinMultiValues(vals.slice(-1));
                         })
                       }
                     />
@@ -441,13 +443,14 @@ export function ProductListingPanel({
                   {isEditing && canEdit ? (
                     <SearchableMultiSelect
                       className={skuPriceInputClass}
-                      placeholder="Select brands"
+                      placeholder="Select brand"
+                      selectionMode="single"
                       options={catalog.brand}
-                      values={brandValues(productData)}
+                      values={brandValues(productData).slice(0, 1)}
                       onValuesChange={(vals) =>
                         applyBatchUpdate((b) => {
                           ensureNestedObject(b, "product_details").brand =
-                            joinMultiValues(vals);
+                            joinMultiValues(vals.slice(-1));
                         })
                       }
                     />
@@ -465,10 +468,11 @@ export function ProductListingPanel({
                     <SearchableMultiSelect
                       className={skuPriceInputClass}
                       placeholder="Select condition"
+                      selectionMode="single"
                       options={catalog.condition}
-                      values={conditionValues(productData)}
+                      values={conditionValues(productData).slice(0, 1)}
                       onValuesChange={(vals) => {
-                        const joined = joinMultiValues(vals);
+                        const joined = joinMultiValues(vals.slice(-1));
                         applyBatchUpdate((b) => {
                           b.product_condition = joined;
                           ensureNestedObject(b, "product_details").condition =
@@ -642,9 +646,10 @@ export function ProductListingPanel({
                   </span>
                   <SearchableMultiSelect
                     className={skuPriceInputClass}
-                    placeholder="Select sizes"
+                    placeholder="Select size"
+                    selectionMode="single"
                     options={catalog.size}
-                    values={sizeValues(productData)}
+                    values={sizeValues(productData).slice(0, 1)}
                     onValuesChange={onSizeChange}
                   />
                 </div>

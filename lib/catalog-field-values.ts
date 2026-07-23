@@ -26,6 +26,27 @@ export function sizeValues(data: ProductListingData): string[] {
     .flatMap((s) => parseMultiValues(s));
 }
 
+/** First value only — for single-select fields. */
+export function firstValue(values: string[]): string {
+  return values[0]?.trim() ?? "";
+}
+
+export function categorySingle(data: ProductListingData): string {
+  return firstValue(categoryValues(data));
+}
+
+export function brandSingle(data: ProductListingData): string {
+  return firstValue(brandValues(data));
+}
+
+export function conditionSingle(data: ProductListingData): string {
+  return firstValue(conditionValues(data));
+}
+
+export function sizeSingle(data: ProductListingData): string {
+  return firstValue(sizeValues(data));
+}
+
 export function colorValues(data: ProductListingData): string[] {
   const fromColor = fieldToMultiValues(data.selectedColor);
   if (fromColor.length) return fromColor;

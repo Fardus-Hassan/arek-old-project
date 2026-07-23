@@ -18,6 +18,11 @@ export type SearchableMultiSelectProps = {
   disabled?: boolean;
   /** Allow typing a custom value and pressing Enter to add it. */
   allowCustom?: boolean;
+  /**
+   * `multiple` (default): accumulate chips.
+   * `single`: picking a value replaces the previous one (same chip UI).
+   */
+  selectionMode?: "multiple" | "single";
 };
 
 function foldForMatch(s: string): string {
@@ -40,12 +45,14 @@ export function SearchableMultiSelect({
   className,
   disabled = false,
   allowCustom = true,
+  selectionMode = "multiple",
 }: SearchableMultiSelectProps) {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
   const inputRef = React.useRef<HTMLInputElement>(null);
   const contentRef = React.useRef<HTMLDivElement>(null);
   const anchorRef = React.useRef<HTMLDivElement>(null);
+  const isSingle = selectionMode === "single";
 
   const filtered = React.useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -60,6 +67,12 @@ export function SearchableMultiSelect({
 
       const known = options.find((opt) => optionMatches(opt, trimmed));
       const next = known ?? trimmed;
+      if (isSingle) {
+        onValuesChange([next]);
+        setQuery("");
+        setOpen(false);
+        return;
+      }
       if (isSelected(values, next)) {
         setQuery("");
         return;
@@ -68,11 +81,21 @@ export function SearchableMultiSelect({
       setQuery("");
       inputRef.current?.focus();
     },
-    [disabled, onValuesChange, options, values],
+    [disabled, isSingle, onValuesChange, options, values],
   );
 
   const toggle = (option: string) => {
     if (disabled) return;
+    if (isSingle) {
+      if (isSelected(values, option)) {
+        onValuesChange([]);
+      } else {
+        onValuesChange([option]);
+        setOpen(false);
+      }
+      setQuery("");
+      return;
+    }
     if (isSelected(values, option)) {
       onValuesChange(values.filter((v) => !optionMatches(v, option)));
       return;
@@ -153,7 +176,13 @@ export function SearchableMultiSelect({
               type="text"
               value={query}
               disabled={disabled}
-              placeholder={values.length === 0 ? placeholder : "Search or type…"}
+              placeholder={
+                values.length === 0
+                  ? placeholder
+                  : isSingle
+                    ? "Change…"
+                    : "Search or type…"
+              }
               className="min-w-[6rem] flex-1 border-0 bg-transparent p-0 text-xs sm:text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:ring-0 disabled:cursor-not-allowed"
               onChange={(e) => {
                 setQuery(e.target.value);
