@@ -69,14 +69,14 @@ const labelClass = "mb-1 block text-xs font-medium text-slate-500";
 
 const DIM_FIELDS = [
   ["Length", "dress_length", "dressLength"],
-  ["Shoe insert", "shoe_size", "shoeInsertLength"],
-  ["Chest Width", "chest_width", "chestWidth"],
-  ["Sleeve length", "sleeve_length", "sleeveLength"],
-  ["Waist width", "waist_width", "waistWidth"],
-  ["Back length", "back_length", "backLength"],
   ["Hip Width", "hip_width", "hipWidth"],
-  ["Under Bust", "under_bust", "underBust"],
+  ["Sleeve length", "sleeve_length", "sleeveLength"],
+  ["Chest Width", "chest_width", "chestWidth"],
   ["Collar Circumference", "collar_circumference", "collarCircumference"],
+  ["Back length", "back_length", "backLength"],
+  ["Waist width", "waist_width", "waistWidth"],
+  ["Shoe insert", "shoe_size", "shoeInsertLength"],
+  ["Under Bust", "under_bust", "underBust"],
 ] as const;
 
 export type CompactProductEditorProps = {
