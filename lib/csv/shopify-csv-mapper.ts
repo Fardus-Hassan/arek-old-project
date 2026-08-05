@@ -120,11 +120,29 @@ function emptyIfZeroNumeric(raw: string): string {
   return String(n);
 }
 
-function extractNumericDim(value: string): string {
+/**
+ * CSV dimension cell: keep decimals (26.50) and ranges (39/40).
+ * Only strips unit suffixes (cm/in) and hides pure numeric zero.
+ */
+function formatDimForCsv(value: string): string {
   if (isPlaceholder(value)) return "";
-  const match = value.match(/[\d.]+/);
-  if (!match) return "";
-  return emptyIfZeroNumeric(match[0]);
+  const t = String(value)
+    .trim()
+    .replace(/\s*(cm|in)\s*$/i, "")
+    .trim();
+  if (!t || t === "—") return "";
+
+  // Pure number (optional decimal / comma): drop only true zeros; keep text as typed.
+  const pure = t.replace(",", ".");
+  if (/^-?\d+([.]\d+)?$/.test(pure)) {
+    const n = Number(pure);
+    if (!Number.isFinite(n) || n === 0) return "";
+    // Preserve trailing zeros from original text when possible (e.g. 26.50).
+    return t.includes(",") ? pure : t;
+  }
+
+  // Free-form: 39/40, mixed text, etc.
+  return t;
 }
 
 function normalizePrice(price: string): string {
@@ -183,8 +201,8 @@ export function mapProductToPrimaryRow(
     : product.metafields.productCode.trim();
 
   const backOrDress =
-    extractNumericDim(product.metafields.backLength) ||
-    extractNumericDim(product.metafields.dressLength);
+    formatDimForCsv(product.metafields.backLength) ||
+    formatDimForCsv(product.metafields.dressLength);
 
   const firstImage = product.images.find((img) => img.url?.trim());
   const imgUrl = firstImage?.url?.trim() ?? "";
@@ -226,20 +244,20 @@ export function mapProductToPrimaryRow(
     "Kod produktu: (product.metafields.custom.kod_produktu_)": productCode,
     "Skład (product.metafields.custom.sk_ad)": skladFabric,
     "Szerokość od pachy do pachy (product.metafields.custom.szeroko_od_pachy_do_pachy_)":
-      extractNumericDim(product.metafields.chestWidth),
+      formatDimForCsv(product.metafields.chestWidth),
     "Długość tył (product.metafields.custom.d_ugo_ty_)": backOrDress,
     "Szerokość Talia (product.metafields.custom.szeroko_talia)":
-      extractNumericDim(product.metafields.waistWidth),
+      formatDimForCsv(product.metafields.waistWidth),
     "Długość rękawa (product.metafields.custom.d_ugo_r_kawa)":
-      extractNumericDim(product.metafields.sleeveLength),
+      formatDimForCsv(product.metafields.sleeveLength),
     "Rozmiar pod biustem (product.metafields.custom.underbust)":
-      extractNumericDim(product.metafields.underBust),
+      formatDimForCsv(product.metafields.underBust),
     "Hip Width (product.metafields.custom.hip_width)":
-      extractNumericDim(product.metafields.hipWidth),
+      formatDimForCsv(product.metafields.hipWidth),
     "Collar Circumference (product.metafields.custom.collar_circumference)":
-      extractNumericDim(product.metafields.collarCircumference),
+      formatDimForCsv(product.metafields.collarCircumference),
     "Length of the shoe insert (product.metafields.custom.shoe_insert_length)":
-      extractNumericDim(product.metafields.shoeInsertLength),
+      formatDimForCsv(product.metafields.shoeInsertLength),
     "Wzór (product.metafields.custom.wz_r)": feature,
     "Fabric (product.metafields.shopify.fabric)": shopifyFabric,
   };
