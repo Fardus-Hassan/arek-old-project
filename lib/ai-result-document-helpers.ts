@@ -102,9 +102,8 @@ export function setDimInputValue(
     dims[key] = null;
     return;
   }
-  const n = Number(trimmed);
-  if (!Number.isFinite(n)) return;
-  dims[key] = n;
+  // Free-form: decimals (26.50), ranges (39/40), commas — not forced to Number.
+  dims[key] = trimmed;
 }
 
 export function parseListFromDelimited(raw: string): string[] {

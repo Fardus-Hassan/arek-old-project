@@ -609,7 +609,7 @@ export function ProductListingPanel({
                 return isEditing ? (
                   <EditableInlineField
                     key={base}
-                    label={`${label} (number)`}
+                    label={label}
                     editing
                     value={inputValue}
                     onChange={(v) =>

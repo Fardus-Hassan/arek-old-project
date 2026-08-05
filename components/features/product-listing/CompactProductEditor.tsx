@@ -626,7 +626,7 @@ export function CompactProductEditor({
                       <div className="relative min-w-0 flex-1 ">
                         <input
                           type="text"
-                          inputMode="decimal"
+                          inputMode="text"
                           value={inputValue}
                           onChange={(e) =>
                             applyBatchUpdate((b) => {
