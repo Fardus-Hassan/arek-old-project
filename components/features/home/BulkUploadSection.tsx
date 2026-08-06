@@ -20,6 +20,7 @@ import {
   pendingToFiles,
   revokePendingFiles,
   stabilizeAlternatingFileOrder,
+  swapAllAlternatingPairs,
   type PendingFile,
 } from "./bulk-preview-utils";
 import { pickImageFilesPreferSelectionOrder } from "./pick-image-files";
@@ -29,18 +30,17 @@ type BulkUploadSectionProps = {
 };
 
 /**
- * Append files.
- * - selectionOrderReliable: keep exact browser order (no front/back name shuffle)
- * - otherwise: alternating may pair-fix by filename (browser often sends A–Z)
+ * Append files in the order the browser gave us.
+ * Only run filename Front/Back pairing when names clearly say front/back
+ * (never invent order — client click order is often lost by the OS dialog).
  */
 function mergePending(
   existing: PendingFile[],
   incoming: File[],
   mode: BulkUploadMode,
-  selectionOrderReliable = false,
 ): PendingFile[] {
   const ordered =
-    mode === "alternating" && !selectionOrderReliable
+    mode === "alternating"
       ? stabilizeAlternatingFileOrder(incoming)
       : incoming;
   return [...existing, ...filesToPending(ordered)];
@@ -158,52 +158,50 @@ export function BulkUploadSection({
 
   const onAlternatingDrop = useCallback((acceptedFiles: File[]) => {
     if (acceptedFiles.length === 0) return;
-    // Drag order ≈ folder list order; still may be A–Z — stabilize pairs by name.
     setPendingAlternating((prev) =>
-      mergePending(prev, acceptedFiles, "alternating", false),
+      mergePending(prev, acceptedFiles, "alternating"),
     );
   }, []);
 
   const onDualFrontDrop = useCallback((acceptedFiles: File[]) => {
     if (acceptedFiles.length === 0) return;
-    setPendingFronts((prev) =>
-      mergePending(prev, acceptedFiles, "dual", false),
-    );
+    setPendingFronts((prev) => mergePending(prev, acceptedFiles, "dual"));
   }, []);
 
   const onDualBackDrop = useCallback((acceptedFiles: File[]) => {
     if (acceptedFiles.length === 0) return;
-    setPendingBacks((prev) =>
-      mergePending(prev, acceptedFiles, "dual", false),
-    );
+    setPendingBacks((prev) => mergePending(prev, acceptedFiles, "dual"));
   }, []);
 
   const browseAndAppend = useCallback(
     async (target: "alternating" | "fronts" | "backs") => {
       const picked = await pickImageFilesPreferSelectionOrder();
       if (!picked?.files.length) return;
-      const { files, selectionOrderReliable } = picked;
+      const { files } = picked;
       if (target === "alternating") {
         setPendingAlternating((prev) =>
-          mergePending(prev, files, "alternating", selectionOrderReliable),
+          mergePending(prev, files, "alternating"),
         );
       } else if (target === "fronts") {
-        setPendingFronts((prev) =>
-          mergePending(prev, files, "dual", selectionOrderReliable),
-        );
+        setPendingFronts((prev) => mergePending(prev, files, "dual"));
       } else {
-        setPendingBacks((prev) =>
-          mergePending(prev, files, "dual", selectionOrderReliable),
-        );
+        setPendingBacks((prev) => mergePending(prev, files, "dual"));
       }
-      if (selectionOrderReliable) {
-        toast.success(
-          `${files.length} image${files.length === 1 ? "" : "s"} added in selection order`,
-        );
-      }
+      toast.success(
+        `${files.length} image${files.length === 1 ? "" : "s"} added. If Front/Back look reversed, use “Flip all pairs”.`,
+      );
     },
     [],
   );
+
+  const flipAllAlternatingPairs = useCallback(() => {
+    setPendingAlternating((prev) => {
+      if (prev.length < 2) return prev;
+      const next = swapAllAlternatingPairs(prev);
+      toast.success("Flipped every Front ↔ Back pair");
+      return next;
+    });
+  }, []);
 
   const alternatingDropzone = useDropzone({
     onDrop: onAlternatingDrop,
@@ -278,10 +276,25 @@ export function BulkUploadSection({
               Drop or click to browse
             </p>
             <p className="text-slate-500 text-xs max-w-md">
-              Order: Front, Back, Front, Back… Browse uses selection order where
-              the browser allows (Chrome/Edge). Drag to swap if needed.
+              Select Front, Back, Front, Back… Windows often ignores click
+              order (A–Z). After import, if every Back shows as Front, press
+              “Flip all pairs” once.
             </p>
           </div>
+
+          {pendingAlternating.length >= 2 && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200/80 bg-amber-50/90 px-3 py-2">
+              <p className="text-xs text-amber-900/90">
+                Front shown as Back? Browser reorder — not your selection.
+              </p>
+              <button
+                type="button"
+                onClick={flipAllAlternatingPairs}
+                className="shrink-0 rounded-lg bg-white px-3 py-1.5 text-xs font-bold text-[#A825C7] shadow-sm ring-1 ring-purple-200 hover:bg-purple-50">
+                Flip all pairs (Front ↔ Back)
+              </button>
+            </div>
+          )}
 
           <BulkFilePreviewStrip
             items={pendingAlternating}

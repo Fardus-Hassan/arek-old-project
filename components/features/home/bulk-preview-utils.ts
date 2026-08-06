@@ -64,6 +64,21 @@ export function swapPendingFiles(
   return next;
 }
 
+/**
+ * Swap every Front/Back pair in place: 0↔1, 2↔3, …
+ * Fixes systematic "browser sent Back first" import (client front/back click order lost).
+ */
+export function swapAllAlternatingPairs(items: PendingFile[]): PendingFile[] {
+  if (items.length < 2) return items;
+  const next = [...items];
+  for (let i = 0; i + 1 < next.length; i += 2) {
+    const a = next[i]!;
+    next[i] = next[i + 1]!;
+    next[i + 1] = a;
+  }
+  return next;
+}
+
 export function pendingToFiles(items: PendingFile[]): File[] {
   return items.map((item) => item.file);
 }
@@ -71,20 +86,18 @@ export function pendingToFiles(items: PendingFile[]): File[] {
 /** Detect front/back from filename (browser FileList is often A–Z, so "back" comes before "front"). */
 export function sideFromFileName(name: string): "front" | "back" | null {
   const n = name.toLowerCase();
-  // Check back first so names containing both are rare edges
+  // Word-boundary only — avoid false matches (e.g. "feedback")
   if (
-    /(^|[_\s.-])(back|rear|tył|tyl|verso)([_\s.-]|\.|$)/i.test(n) ||
-    /[_-]back/i.test(n) ||
-    /back[_-]/i.test(n) ||
-    n.includes("back")
+    /(^|[^a-z])(back|rear|tył|tyl|verso)([^a-z]|$)/i.test(n) ||
+    /[_-]back([_./-]|$)/i.test(n) ||
+    /(^|[_./-])back[_./-]/i.test(n)
   ) {
     return "back";
   }
   if (
-    /(^|[_\s.-])(front|przód|przod|recto)([_\s.-]|\.|$)/i.test(n) ||
-    /[_-]front/i.test(n) ||
-    /front[_-]/i.test(n) ||
-    n.includes("front")
+    /(^|[^a-z])(front|przód|przod|recto)([^a-z]|$)/i.test(n) ||
+    /[_-]front([_./-]|$)/i.test(n) ||
+    /(^|[_./-])front[_./-]/i.test(n)
   ) {
     return "front";
   }
