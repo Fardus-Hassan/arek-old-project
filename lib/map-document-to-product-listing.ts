@@ -406,15 +406,15 @@ export function mapBatchItemToProductListingData(
 
   const aiRoot = readAiRoot(doc ?? null);
 
-  const selectedSizeRaw = d?.selected_size;
-  const selectedSize =
-    selectedSizeRaw != null && String(selectedSizeRaw).trim() !== ""
-      ? String(selectedSizeRaw)
-      : Array.isArray(sizesArr) && sizesArr.length > 0
-        ? String(sizesArr[0])
-        : variant?.sizes?.length
-          ? String(variant.sizes[0])
-          : "—";
+  // Size empty unless the user (or explicit variant_data.sizes) set it.
+  // Never use dimensions.selected_size / available_sizes (AI guesses).
+  const sizeList = Array.isArray(variant?.sizes)
+    ? variant.sizes
+        .map(String)
+        .map((s) => s.trim())
+        .filter((s) => s && s !== "—")
+    : [];
+  const selectedSize = sizeList.length ? joinMultiValues(sizeList) : "—";
 
   const colors = variant?.colors?.length
     ? variant.colors.map(String).filter((c) => c && c !== "—")
@@ -473,7 +473,7 @@ export function mapBatchItemToProductListingData(
       gender: String(detailsIn?.gender ?? "—"),
     },
     variants: {
-      sizes: variant?.sizes?.length ? variant.sizes.map(String) : ["—"],
+      sizes: sizeList.length ? sizeList : ["—"],
       colors: variant?.colors?.length ? variant.colors.map(String) : ["—"],
       condition: normalizeGoogleCondition(variant?.condition),
       feature: String(variant?.feature ?? "—"),

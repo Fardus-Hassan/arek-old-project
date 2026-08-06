@@ -231,6 +231,11 @@ export function CompactProductEditor({
   const selectedLabel =
     productData.images[safeSelectedImage]?.label ?? "—";
   const mediaChips = productData.selectedFeatures.filter(Boolean);
+  const sizeDisplayValues = sizeValues(productData);
+  const sizeDisplayText =
+    sizeDisplayValues.length > 0
+      ? joinMultiValues(sizeDisplayValues)
+      : "—";
 
   const missingPublishFields =
     (!price.trim() ? 1 : 0) + (!sku.trim() ? 1 : 0);
@@ -484,12 +489,12 @@ export function CompactProductEditor({
                   placeholder="Select"
                   selectionMode="single"
                   options={catalog.size}
-                  values={sizeValues(productData).slice(0, 1)}
+                  values={sizeDisplayValues.slice(0, 1)}
                   onValuesChange={onSizeChange}
                 />
               ) : (
                 <ReadValue>
-                  {displayMultiValue(productData.selectedSize)}
+                  {sizeDisplayText}
                 </ReadValue>
               )}
             </FieldShell>
@@ -727,12 +732,12 @@ export function CompactProductEditor({
                   placeholder="Size"
                   selectionMode="single"
                   options={catalog.size}
-                  values={sizeValues(productData).slice(0, 1)}
+                  values={sizeDisplayValues.slice(0, 1)}
                   onValuesChange={onSizeChange}
                 />
               ) : (
                 <ReadValue>
-                  {displayMultiValue(productData.selectedSize)}
+                  {sizeDisplayText}
                 </ReadValue>
               )}
             </FieldShell>

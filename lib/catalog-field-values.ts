@@ -19,8 +19,7 @@ export function conditionValues(data: ProductListingData): string[] {
 }
 
 export function sizeValues(data: ProductListingData): string[] {
-  const fromSize = fieldToMultiValues(data.selectedSize);
-  if (fromSize.length) return fromSize;
+  // Only variant_data.sizes — never dimensions.selected_size / AI auto-fill.
   return data.variants.sizes
     .filter((s) => s && s !== "—")
     .flatMap((s) => parseMultiValues(s));

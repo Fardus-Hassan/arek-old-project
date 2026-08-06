@@ -48,8 +48,18 @@ import { useUpdateDocumentMutation } from "@/lib/api/documentApi";
 import { useGetModelPositionQuery } from "@/lib/api/modelPositionApi";
 import { getRtkQueryErrorMessage } from "@/lib/api/authApi";
 import { CompactProductEditor } from "@/components/features/product-listing/CompactProductEditor";
-import { stripAiFabricFeatureFromPayload } from "@/lib/fabric-feature-pending";
+import {
+  stripAiAutoSizeFromPayload,
+  stripAiFabricFeatureFromPayload,
+} from "@/lib/fabric-feature-pending";
 import { cn } from "@/lib/utils";
+
+/** Normalize AI-generated payload for the result editor. */
+function prepareResultPayload(
+  payload: StoredGeneratedPayload,
+): StoredGeneratedPayload {
+  return stripAiAutoSizeFromPayload(stripAiFabricFeatureFromPayload(payload));
+}
 
 /** Shown when nothing is stored in localStorage yet. */
 const FALLBACK_PRODUCT_DATA: ProductListingData = {
@@ -84,10 +94,10 @@ const FALLBACK_PRODUCT_DATA: ProductListingData = {
       gender: "Female",
     },
     variants: {
-      sizes: ["S", "M", "L", "XL"],
-      colors: ["Blue", "Pink"],
+      sizes: ["—"],
+      colors: ["—"],
       condition: "used",
-      feature: "Floral print",
+      feature: "—",
     },
     metafields: {
       productCode: "DR-1023",
@@ -123,7 +133,7 @@ const FALLBACK_PRODUCT_DATA: ProductListingData = {
     productCondition: "Bardzo dobry",
     published: DEFAULT_SHOPIFY_PUBLISHED,
     shopifyStatus: DEFAULT_SHOPIFY_STATUS,
-    selectedSize: "M",
+    selectedSize: "—",
     selectedColor: "Szary",
     weightGrams: "100",
     inventoryQty: "1",
@@ -151,7 +161,7 @@ const AiResultContent: React.FC = () => {
 
   useEffect(() => {
     const loaded = loadGeneratedDocument();
-    const prepared = loaded ? stripAiFabricFeatureFromPayload(loaded) : null;
+    const prepared = loaded ? prepareResultPayload(loaded) : null;
     setLocalPayload(prepared);
     if (prepared?.document) {
       const { skuByTab: s, priceByTab: p } = skuPriceMapsFromDocument(
@@ -286,7 +296,7 @@ const AiResultContent: React.FC = () => {
             document: mergedDoc,
             ...(mergedIds.length ? { generatedImageIds: mergedIds } : {}),
           };
-          const stripped = stripAiFabricFeatureFromPayload(nextPayload);
+          const stripped = prepareResultPayload(nextPayload);
           saveGeneratedDocument(stripped.document, mergedIds);
           setLocalPayload(stripped);
           const det = res.data.imageDetails;
@@ -318,7 +328,7 @@ const AiResultContent: React.FC = () => {
               document: nextDoc,
               ...(mergedIds.length ? { generatedImageIds: mergedIds } : {}),
             };
-            const stripped = stripAiFabricFeatureFromPayload(nextPayload);
+            const stripped = prepareResultPayload(nextPayload);
             saveGeneratedDocument(stripped.document, mergedIds);
             setLocalPayload(stripped);
             const maps = skuPriceMapsFromDocument(nextDoc);
