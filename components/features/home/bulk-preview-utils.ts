@@ -68,6 +68,107 @@ export function pendingToFiles(items: PendingFile[]): File[] {
   return items.map((item) => item.file);
 }
 
+/** Detect front/back from filename (browser FileList is often A–Z, so "back" comes before "front"). */
+export function sideFromFileName(name: string): "front" | "back" | null {
+  const n = name.toLowerCase();
+  // Check back first so names containing both are rare edges
+  if (
+    /(^|[_\s.-])(back|rear|tył|tyl|verso)([_\s.-]|\.|$)/i.test(n) ||
+    /[_-]back/i.test(n) ||
+    /back[_-]/i.test(n) ||
+    n.includes("back")
+  ) {
+    return "back";
+  }
+  if (
+    /(^|[_\s.-])(front|przód|przod|recto)([_\s.-]|\.|$)/i.test(n) ||
+    /[_-]front/i.test(n) ||
+    /front[_-]/i.test(n) ||
+    n.includes("front")
+  ) {
+    return "front";
+  }
+  return null;
+}
+
+function baseKeyFromName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/\.[^.]+$/, "")
+    .replace(/[_-\s]?(front|back|rear|tył|tyl|przód|przod|verso|recto)/gi, "")
+    .replace(/[_-\s]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+/**
+ * Alternating bulk: keep group order as much as possible, but force Front before
+ * Back inside each pair when filenames label the side (browser often returns A–Z).
+ * Does NOT full-sort the entire list by file name.
+ */
+export function stabilizeAlternatingFileOrder(files: File[]): File[] {
+  if (files.length < 2) return files;
+
+  const tagged = files.map((file, index) => ({
+    file,
+    index,
+    side: sideFromFileName(file.name),
+    base: baseKeyFromName(file.name),
+  }));
+
+  const withSide = tagged.filter((t) => t.side != null);
+  // Enough labeled files → group by product base (front then back).
+  if (withSide.length >= Math.max(2, Math.ceil(files.length * 0.4))) {
+    type G = { front?: File; back?: File; firstIndex: number };
+    const byBase = new Map<string, G>();
+
+    for (const t of withSide) {
+      let g = byBase.get(t.base);
+      if (!g) {
+        g = { firstIndex: t.index };
+        byBase.set(t.base, g);
+      }
+      g.firstIndex = Math.min(g.firstIndex, t.index);
+      if (t.side === "front" && !g.front) g.front = t.file;
+      if (t.side === "back" && !g.back) g.back = t.file;
+    }
+
+    const orderedGroups = [...byBase.values()].sort(
+      (a, b) => a.firstIndex - b.firstIndex,
+    );
+    const out: File[] = [];
+    const used = new Set<File>();
+
+    for (const g of orderedGroups) {
+      if (g.front && g.back) {
+        out.push(g.front, g.back);
+        used.add(g.front);
+        used.add(g.back);
+      }
+    }
+
+    for (const f of files) {
+      if (!used.has(f)) out.push(f);
+    }
+
+    if (used.size >= files.length - 1 && out.length === files.length) {
+      return out;
+    }
+  }
+
+  // Fallback: in each 0–1, 2–3, … pair, swap if clearly Back then Front
+  const next = [...files];
+  for (let i = 0; i + 1 < next.length; i += 2) {
+    const aSide = sideFromFileName(next[i]!.name);
+    const bSide = sideFromFileName(next[i + 1]!.name);
+    if (aSide === "back" && bSide === "front") {
+      const tmp = next[i]!;
+      next[i] = next[i + 1]!;
+      next[i + 1] = tmp;
+    }
+  }
+  return next;
+}
+
 /** Pair in current list order — no re-sort. */
 export function pairAlternatingInOrder(files: File[]): {
   ok: true;

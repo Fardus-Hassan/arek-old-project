@@ -19,16 +19,31 @@ import {
   pairDualInOrder,
   pendingToFiles,
   revokePendingFiles,
+  stabilizeAlternatingFileOrder,
   type PendingFile,
 } from "./bulk-preview-utils";
+import { pickImageFilesPreferSelectionOrder } from "./pick-image-files";
 
 type BulkUploadSectionProps = {
   onApply: (groups: ImageGroup[]) => void;
 };
 
-/** Keep browser selection / drop order (do not sort by filename). */
-function mergePending(existing: PendingFile[], incoming: File[]): PendingFile[] {
-  return [...existing, ...filesToPending(incoming)];
+/**
+ * Append files.
+ * - selectionOrderReliable: keep exact browser order (no front/back name shuffle)
+ * - otherwise: alternating may pair-fix by filename (browser often sends A–Z)
+ */
+function mergePending(
+  existing: PendingFile[],
+  incoming: File[],
+  mode: BulkUploadMode,
+  selectionOrderReliable = false,
+): PendingFile[] {
+  const ordered =
+    mode === "alternating" && !selectionOrderReliable
+      ? stabilizeAlternatingFileOrder(incoming)
+      : incoming;
+  return [...existing, ...filesToPending(ordered)];
 }
 
 export function BulkUploadSection({
@@ -143,24 +158,59 @@ export function BulkUploadSection({
 
   const onAlternatingDrop = useCallback((acceptedFiles: File[]) => {
     if (acceptedFiles.length === 0) return;
-    setPendingAlternating((prev) => mergePending(prev, acceptedFiles));
+    // Drag order ≈ folder list order; still may be A–Z — stabilize pairs by name.
+    setPendingAlternating((prev) =>
+      mergePending(prev, acceptedFiles, "alternating", false),
+    );
   }, []);
 
   const onDualFrontDrop = useCallback((acceptedFiles: File[]) => {
     if (acceptedFiles.length === 0) return;
-    setPendingFronts((prev) => mergePending(prev, acceptedFiles));
+    setPendingFronts((prev) =>
+      mergePending(prev, acceptedFiles, "dual", false),
+    );
   }, []);
 
   const onDualBackDrop = useCallback((acceptedFiles: File[]) => {
     if (acceptedFiles.length === 0) return;
-    setPendingBacks((prev) => mergePending(prev, acceptedFiles));
+    setPendingBacks((prev) =>
+      mergePending(prev, acceptedFiles, "dual", false),
+    );
   }, []);
+
+  const browseAndAppend = useCallback(
+    async (target: "alternating" | "fronts" | "backs") => {
+      const picked = await pickImageFilesPreferSelectionOrder();
+      if (!picked?.files.length) return;
+      const { files, selectionOrderReliable } = picked;
+      if (target === "alternating") {
+        setPendingAlternating((prev) =>
+          mergePending(prev, files, "alternating", selectionOrderReliable),
+        );
+      } else if (target === "fronts") {
+        setPendingFronts((prev) =>
+          mergePending(prev, files, "dual", selectionOrderReliable),
+        );
+      } else {
+        setPendingBacks((prev) =>
+          mergePending(prev, files, "dual", selectionOrderReliable),
+        );
+      }
+      if (selectionOrderReliable) {
+        toast.success(
+          `${files.length} image${files.length === 1 ? "" : "s"} added in selection order`,
+        );
+      }
+    },
+    [],
+  );
 
   const alternatingDropzone = useDropzone({
     onDrop: onAlternatingDrop,
     accept: IMAGE_ACCEPT,
     multiple: true,
     noKeyboard: true,
+    noClick: true,
   });
 
   const dualFrontDropzone = useDropzone({
@@ -168,6 +218,7 @@ export function BulkUploadSection({
     accept: IMAGE_ACCEPT,
     multiple: true,
     noKeyboard: true,
+    noClick: true,
   });
 
   const dualBackDropzone = useDropzone({
@@ -175,6 +226,7 @@ export function BulkUploadSection({
     accept: IMAGE_ACCEPT,
     multiple: true,
     noKeyboard: true,
+    noClick: true,
   });
 
   const alternatingReady =
@@ -216,17 +268,18 @@ export function BulkUploadSection({
         <div className="space-y-4">
           <div
             {...alternatingDropzone.getRootProps()}
+            onClick={() => void browseAndAppend("alternating")}
             className={`min-h-[100px] rounded-2xl border-2 border-dashed transition-all cursor-pointer flex flex-col items-center justify-center p-5 text-center
               ${alternatingDropzone.isDragActive ? "border-[#E5BEEE] bg-[#F9F1FB]" : "border-purple-100 hover:border-purple-200 bg-[#fafafa]"}
             `}>
             <input {...alternatingDropzone.getInputProps()} />
             <Upload className="w-7 h-7 text-[#A825C7] mb-2" />
             <p className="text-slate-900 font-bold text-sm mb-1">
-              Drop all images at once
+              Drop or click to browse
             </p>
             <p className="text-slate-500 text-xs max-w-md">
-              Order: Front, Back, Front, Back… — preview below, drag to fix
-              order
+              Order: Front, Back, Front, Back… Browse uses selection order where
+              the browser allows (Chrome/Edge). Drag to swap if needed.
             </p>
           </div>
 
@@ -257,43 +310,51 @@ export function BulkUploadSection({
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row gap-3 min-w-0">
-            <div className="flex-1 min-w-0 space-y-3">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 min-w-0">
+            <div className="min-w-0 space-y-3 rounded-2xl border border-slate-100 bg-slate-50/40 p-3">
               <div
                 {...dualFrontDropzone.getRootProps()}
-                className={`min-h-[90px] rounded-2xl border-2 border-dashed transition-all cursor-pointer flex flex-col items-center justify-center p-4 text-center
-                  ${dualFrontDropzone.isDragActive ? "border-[#E5BEEE] bg-[#F9F1FB]" : "border-purple-100 hover:border-purple-200 bg-[#fafafa]"}
+                onClick={() => void browseAndAppend("fronts")}
+                className={`min-h-[88px] rounded-xl border-2 border-dashed transition-all cursor-pointer flex flex-col items-center justify-center p-4 text-center
+                  ${dualFrontDropzone.isDragActive ? "border-[#E5BEEE] bg-[#F9F1FB]" : "border-slate-200 bg-white hover:border-purple-200"}
                 `}>
                 <input {...dualFrontDropzone.getInputProps()} />
-                <p className="text-slate-900 font-bold text-sm mb-1">
+                <p className="text-slate-900 font-bold text-sm mb-0.5">
                   All Front images
                 </p>
-                <p className="text-slate-500 text-xs">Drop or browse multiple</p>
+                <p className="text-slate-500 text-xs">
+                  Drop or click to browse (selection order)
+                </p>
               </div>
               <BulkFilePreviewStrip
                 items={pendingFronts}
                 getLabel={(i) => dualSlotLabel(i, "front")}
                 onReorder={setPendingFronts}
                 onRemove={removeFront}
+                compact
               />
             </div>
-            <div className="flex-1 min-w-0 space-y-3">
+            <div className="min-w-0 space-y-3 rounded-2xl border border-slate-100 bg-slate-50/40 p-3">
               <div
                 {...dualBackDropzone.getRootProps()}
-                className={`min-h-[90px] rounded-2xl border-2 border-dashed transition-all cursor-pointer flex flex-col items-center justify-center p-4 text-center
-                  ${dualBackDropzone.isDragActive ? "border-[#E5BEEE] bg-[#F9F1FB]" : pendingFronts.length > 0 ? "border-[#A825C7]/40 bg-[#F9F1FB]/40" : "border-purple-100 hover:border-purple-200 bg-[#fafafa]"}
+                onClick={() => void browseAndAppend("backs")}
+                className={`min-h-[88px] rounded-xl border-2 border-dashed transition-all cursor-pointer flex flex-col items-center justify-center p-4 text-center
+                  ${dualBackDropzone.isDragActive ? "border-[#E5BEEE] bg-[#F9F1FB]" : pendingFronts.length > 0 ? "border-[#A825C7]/35 bg-white" : "border-slate-200 bg-white hover:border-purple-200"}
                 `}>
                 <input {...dualBackDropzone.getInputProps()} />
-                <p className="text-slate-900 font-bold text-sm mb-1">
+                <p className="text-slate-900 font-bold text-sm mb-0.5">
                   All Back images
                 </p>
-                <p className="text-slate-500 text-xs">Same count as Fronts</p>
+                <p className="text-slate-500 text-xs">
+                  Same count · drop or click (selection order)
+                </p>
               </div>
               <BulkFilePreviewStrip
                 items={pendingBacks}
                 getLabel={(i) => dualSlotLabel(i, "back")}
                 onReorder={setPendingBacks}
                 onRemove={removeBack}
+                compact
               />
             </div>
           </div>

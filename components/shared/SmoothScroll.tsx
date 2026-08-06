@@ -17,6 +17,13 @@ export default function SmoothScroll({
       smoothWheel: true,
       wheelMultiplier: 1,
       touchMultiplier: 2,
+      // Nested scroll areas mark themselves with data-lenis-prevent
+      prevent: (node) =>
+        Boolean(
+          node.closest(
+            "[data-lenis-prevent],[data-lenis-prevent-wheel],[data-lenis-prevent-touch]",
+          ),
+        ),
     });
 
     function raf(time: number) {

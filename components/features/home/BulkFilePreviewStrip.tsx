@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { GripVertical, X } from "lucide-react";
 import type { PendingFile } from "./bulk-preview-utils";
-import { reorderPendingFiles } from "./bulk-preview-utils";
+import { swapPendingFiles } from "./bulk-preview-utils";
 
 type BulkFilePreviewStripProps = {
   items: PendingFile[];
@@ -11,11 +11,22 @@ type BulkFilePreviewStripProps = {
   onReorder: (items: PendingFile[]) => void;
   onRemove?: (index: number) => void;
   emptyHint?: string;
+  /** Narrow column (Fronts / Backs side-by-side) */
+  compact?: boolean;
+};
+
+type DragGhost = {
+  index: number;
+  url: string;
+  label: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
 };
 
 /**
- * Pointer-based reorder (not HTML5 DnD) so multi-row grids + scroll
- * still work with 20–30+ thumbnails.
+ * Multi-row pointer drag: swap two thumbs; floating image follows the cursor.
  */
 export function BulkFilePreviewStrip({
   items,
@@ -23,25 +34,25 @@ export function BulkFilePreviewStrip({
   onReorder,
   onRemove,
   emptyHint,
+  compact = false,
 }: BulkFilePreviewStripProps) {
   const listRef = useRef<HTMLDivElement>(null);
   const itemElsRef = useRef<(HTMLDivElement | null)[]>([]);
   const dragFromRef = useRef<number | null>(null);
   const overRef = useRef<number | null>(null);
-  const autoScrollRaf = useRef<number | null>(null);
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
 
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   const [overIndex, setOverIndex] = useState<number | null>(null);
+  const [ghost, setGhost] = useState<DragGhost | null>(null);
 
   const clearDrag = useCallback(() => {
     dragFromRef.current = null;
     overRef.current = null;
     setDragFrom(null);
     setOverIndex(null);
-    if (autoScrollRaf.current != null) {
-      cancelAnimationFrame(autoScrollRaf.current);
-      autoScrollRaf.current = null;
-    }
+    setGhost(null);
   }, []);
 
   const indexFromPoint = useCallback((clientX: number, clientY: number) => {
@@ -66,19 +77,15 @@ export function BulkFilePreviewStrip({
     const list = listRef.current;
     if (!list) return;
     const rect = list.getBoundingClientRect();
-    const edge = 48;
-    const maxStep = 14;
-
+    const edge = 56;
+    const maxStep = 16;
     let dy = 0;
     if (clientY < rect.top + edge) {
       dy = -maxStep * (1 - Math.max(0, clientY - rect.top) / edge);
     } else if (clientY > rect.bottom - edge) {
       dy = maxStep * (1 - Math.max(0, rect.bottom - clientY) / edge);
     }
-
-    if (dy !== 0) {
-      list.scrollTop += dy;
-    }
+    if (dy !== 0) list.scrollTop += dy;
   }, []);
 
   useEffect(() => {
@@ -87,6 +94,9 @@ export function BulkFilePreviewStrip({
     const onMove = (e: PointerEvent) => {
       e.preventDefault();
       scrollIfNearEdge(e.clientY);
+      setGhost((g) =>
+        g ? { ...g, x: e.clientX, y: e.clientY } : g,
+      );
       const hit = indexFromPoint(e.clientX, e.clientY);
       if (hit != null && hit !== overRef.current) {
         overRef.current = hit;
@@ -98,7 +108,7 @@ export function BulkFilePreviewStrip({
       const from = dragFromRef.current;
       const to = indexFromPoint(e.clientX, e.clientY) ?? overRef.current;
       if (from != null && to != null && from !== to) {
-        onReorder(reorderPendingFiles(items, from, to));
+        onReorder(swapPendingFiles(itemsRef.current, from, to));
       }
       clearDrag();
     };
@@ -106,59 +116,93 @@ export function BulkFilePreviewStrip({
     window.addEventListener("pointermove", onMove, { passive: false });
     window.addEventListener("pointerup", onUp);
     window.addEventListener("pointercancel", clearDrag);
+    document.body.style.cursor = "grabbing";
+    document.body.style.userSelect = "none";
 
     return () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", clearDrag);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
     };
-  }, [
-    clearDrag,
-    dragFrom,
-    indexFromPoint,
-    items,
-    onReorder,
-    scrollIfNearEdge,
-  ]);
+  }, [clearDrag, dragFrom, indexFromPoint, onReorder, scrollIfNearEdge]);
 
   if (items.length === 0) {
     if (!emptyHint) return null;
     return (
-      <p className="text-xs text-slate-400 text-center py-2">{emptyHint}</p>
+      <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50/80 py-6 text-center text-xs text-slate-400">
+        {emptyHint}
+      </p>
     );
   }
 
   itemElsRef.current = itemElsRef.current.slice(0, items.length);
 
   const startDrag = (index: number, e: React.PointerEvent) => {
-    // Don't start drag from remove button
     if ((e.target as HTMLElement).closest("button")) return;
     e.preventDefault();
     e.stopPropagation();
+
+    const el = itemElsRef.current[index];
+    const rect = el?.getBoundingClientRect();
+    const item = items[index];
+    if (!item) return;
+
     dragFromRef.current = index;
     overRef.current = index;
     setDragFrom(index);
     setOverIndex(index);
+    setGhost({
+      index,
+      url: item.previewUrl,
+      label: getLabel(index),
+      x: e.clientX,
+      y: e.clientY,
+      w: Math.min(rect?.width ?? 120, 140),
+      h: Math.min(rect?.height ?? 160, 176),
+    });
   };
+
+  // Even column counts so Front+Back pairs stay on the same row (jira / jura).
+  const gridClass = compact
+    ? "grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-2.5"
+    : "grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3";
 
   return (
     <div
-      className="space-y-2"
+      className="space-y-2.5"
       onDragEnter={(e) => e.stopPropagation()}
       onDragOver={(e) => e.stopPropagation()}
       onDrop={(e) => e.stopPropagation()}>
-      <p className="text-xs font-medium text-slate-500">
-        Drag thumbnails to reorder (works across all rows)
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs font-medium text-slate-600">
+          {items.length} image{items.length === 1 ? "" : "s"}
+        </p>
+        <p className="text-[11px] text-slate-400">
+          Drag one onto another to swap
+          {!compact ? " · pairs stay side by side" : ""}
+        </p>
+      </div>
+
       <div
         ref={listRef}
-        className={`grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2 w-full min-w-0 max-h-[min(420px,50vh)] overflow-y-auto overflow-x-hidden overscroll-contain pr-1 select-none ${
+        data-lenis-prevent
+        data-lenis-prevent-wheel
+        data-lenis-prevent-touch
+        onWheel={(e) => {
+          // Keep wheel scrolling inside this list (Lenis otherwise steals scroll).
+          e.stopPropagation();
+        }}
+        className={`grid w-full min-w-0 max-h-[min(520px,58vh)] overflow-y-auto overflow-x-hidden overscroll-y-contain pr-1.5 select-none ${gridClass} ${
           dragFrom != null ? "touch-none" : ""
         }`}
         style={{ WebkitOverflowScrolling: "touch" }}>
         {items.map((item, index) => {
           const isDragging = dragFrom === index;
-          const isOver = overIndex === index && dragFrom !== null && dragFrom !== index;
+          const isOver =
+            overIndex === index && dragFrom !== null && dragFrom !== index;
+          const label = getLabel(index);
 
           return (
             <div
@@ -167,22 +211,24 @@ export function BulkFilePreviewStrip({
                 itemElsRef.current[index] = el;
               }}
               onPointerDown={(e) => startDrag(index, e)}
-              className={`relative aspect-[3/4] min-h-0 w-full rounded-xl border-2 overflow-hidden bg-white transition-[box-shadow,opacity,transform] select-none cursor-grab active:cursor-grabbing
-                ${isDragging ? "border-[#A825C7] opacity-50 scale-95 z-10" : ""}
-                ${isOver ? "border-[#A825C7] ring-2 ring-[#A825C7]/50 scale-[1.03]" : "border-slate-200 hover:border-purple-200"}
+              className={`group flex flex-col overflow-hidden rounded-2xl border bg-white shadow-sm transition-[box-shadow,opacity,border-color,transform] select-none cursor-grab active:cursor-grabbing
+                ${isDragging ? "border-[#A825C7] opacity-40 ring-2 ring-dashed ring-[#A825C7]/40" : ""}
+                ${isOver ? "border-[#A825C7] ring-2 ring-[#A825C7]/50 shadow-md scale-[1.02]" : !isDragging ? "border-slate-200/90 hover:border-purple-200 hover:shadow-md" : ""}
               `}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={item.previewUrl}
-                alt={getLabel(index)}
-                draggable={false}
-                className="h-full w-full object-cover pointer-events-none"
-              />
-              <div className="absolute top-0 left-0 right-0 flex items-center justify-between gap-0.5 bg-black/55 px-1 py-0.5">
-                <GripVertical className="w-3 h-3 text-white/80 shrink-0 pointer-events-none" />
-                <span className="text-[9px] sm:text-[10px] font-bold text-white truncate pointer-events-none">
-                  {getLabel(index)}
+              {/* Large clear image — no heavy overlay on the photo */}
+              <div className="relative aspect-[4/5] w-full bg-gradient-to-b from-slate-50 to-slate-100">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={item.previewUrl}
+                  alt={label}
+                  draggable={false}
+                  className="absolute inset-0 h-full w-full object-contain p-1 pointer-events-none"
+                />
+
+                <span className="absolute left-1.5 top-1.5 flex h-6 min-w-6 items-center justify-center rounded-full bg-white/95 px-1.5 text-[11px] font-bold text-slate-700 shadow-sm ring-1 ring-slate-200/80">
+                  {index + 1}
                 </span>
+
                 {onRemove && (
                   <button
                     type="button"
@@ -191,19 +237,47 @@ export function BulkFilePreviewStrip({
                       onRemove(index);
                     }}
                     onPointerDown={(e) => e.stopPropagation()}
-                    className="shrink-0 text-white/90 hover:text-white cursor-pointer p-0.5"
+                    className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-white/95 text-slate-500 shadow-sm ring-1 ring-slate-200/80 transition-colors hover:bg-rose-50 hover:text-rose-600 sm:opacity-0 sm:group-hover:opacity-100"
                     aria-label="Remove">
-                    <X className="w-3 h-3" />
+                    <X className="h-3.5 w-3.5" />
                   </button>
                 )}
               </div>
-              <span className="absolute bottom-0.5 right-1 text-[9px] font-semibold text-white drop-shadow-sm pointer-events-none">
-                {index + 1}
-              </span>
+
+              {/* Label row under image so photo stays readable */}
+              <div className="flex items-center gap-1 border-t border-slate-100 bg-white px-2 py-1.5">
+                <GripVertical className="h-3.5 w-3.5 shrink-0 text-slate-300" />
+                <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-slate-700 sm:text-xs">
+                  {label}
+                </span>
+              </div>
             </div>
           );
         })}
       </div>
+
+      {ghost ? (
+        <div
+          className="pointer-events-none fixed z-[9999] overflow-hidden rounded-2xl border-2 border-[#A825C7] bg-white shadow-2xl shadow-purple-900/30"
+          style={{
+            width: ghost.w,
+            height: ghost.h,
+            left: ghost.x,
+            top: ghost.y,
+            transform: "translate(-50%, -55%) rotate(-2deg)",
+            opacity: 0.96,
+          }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={ghost.url}
+            alt=""
+            className="h-[78%] w-full object-contain bg-slate-50 p-1"
+          />
+          <div className="flex h-[22%] items-center justify-center border-t border-slate-100 bg-white px-2 text-center text-[11px] font-bold text-slate-800">
+            {ghost.label}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
