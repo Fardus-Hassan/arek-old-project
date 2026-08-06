@@ -28,10 +28,10 @@ export function pairAlternating(files: File[]): PairResult {
         "Upload an even number of images (Front, Back, Front, Back…).",
     };
   }
-  const sorted = sortFilesByName(files);
+  // Preserve selection/drop order — do not sort by filename.
   const pairs: FilePair[] = [];
-  for (let i = 0; i < sorted.length; i += 2) {
-    pairs.push([sorted[i]!, sorted[i + 1]!]);
+  for (let i = 0; i < files.length; i += 2) {
+    pairs.push([files[i]!, files[i + 1]!]);
   }
   return { ok: true, pairs };
 }
@@ -46,11 +46,10 @@ export function pairDualArrays(fronts: File[], backs: File[]): PairResult {
       message: `Front and Back image counts must match (got ${fronts.length} fronts, ${backs.length} backs).`,
     };
   }
-  const sortedFronts = sortFilesByName(fronts);
-  const sortedBacks = sortFilesByName(backs);
-  const pairs: FilePair[] = sortedFronts.map((front, i) => [
+  // Preserve selection/drop order — do not sort by filename.
+  const pairs: FilePair[] = fronts.map((front, i) => [
     front,
-    sortedBacks[i]!,
+    backs[i]!,
   ]);
   return { ok: true, pairs };
 }

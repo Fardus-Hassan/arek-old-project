@@ -27,7 +27,6 @@ import {
   type ImageGroup,
 } from "./image-group-types";
 import {
-  sortFilesByName,
   spillFilesIntoGroups,
 } from "./bulk-group-upload";
 
@@ -128,7 +127,7 @@ const HeroSection = () => {
     const groupIndex = groups.findIndex((g) => g.id === groupId);
     if (groupIndex < 0) return;
     setGroups((prev) =>
-      spillFilesIntoGroups(prev, groupIndex, slot, sortFilesByName(files)),
+      spillFilesIntoGroups(prev, groupIndex, slot, files),
     );
   };
 

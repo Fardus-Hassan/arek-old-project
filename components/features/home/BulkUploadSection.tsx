@@ -6,7 +6,6 @@ import { Layers, Upload } from "lucide-react";
 import { toast } from "sonner";
 import {
   buildGroupsFromPairs,
-  sortFilesByName,
   type BulkUploadMode,
 } from "./bulk-group-upload";
 import type { ImageGroup } from "./image-group-types";
@@ -27,8 +26,9 @@ type BulkUploadSectionProps = {
   onApply: (groups: ImageGroup[]) => void;
 };
 
+/** Keep browser selection / drop order (do not sort by filename). */
 function mergePending(existing: PendingFile[], incoming: File[]): PendingFile[] {
-  return [...existing, ...filesToPending(sortFilesByName(incoming))];
+  return [...existing, ...filesToPending(incoming)];
 }
 
 export function BulkUploadSection({
