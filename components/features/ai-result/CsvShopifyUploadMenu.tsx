@@ -31,9 +31,13 @@ type CsvShopifyUploadMenuProps = {
   variant?: "primary" | "outline";
   /**
    * Run before CSV upload (e.g. persist product).
-   * Return `false` to cancel upload.
+   * Return `false` to cancel.
+   * Return a fresh TabCsvEntry[] to upload (after save ids can change).
+   * Return true to keep the originally selected items.
    */
-  onBeforeUpload?: () => Promise<boolean>;
+  onBeforeUpload?: (
+    items: TabCsvEntry[],
+  ) => Promise<boolean | TabCsvEntry[]>;
   /** Extra busy state while parent is saving */
   saving?: boolean;
   /** Parent handles status UI + history (no response modal here). */
@@ -102,20 +106,39 @@ export function CsvShopifyUploadMenu({
     }
     setLocalBusy(true);
     try {
+      let itemsToUpload = items;
       if (onBeforeUpload) {
-        const ok = await onBeforeUpload();
-        if (!ok) return;
+        const next = await onBeforeUpload(items);
+        if (next === false) return;
+        if (Array.isArray(next) && next.length > 0) {
+          itemsToUpload = next;
+        }
       }
-      const files = tabCsvEntriesToFiles(items);
-      const generatedImageIds = items
-        .map((e) => e.generatedImageId?.trim())
-        .filter((id): id is string => Boolean(id));
-      const tabIndexes = items.map((e) => e.index);
+      const files = tabCsvEntriesToFiles(itemsToUpload);
+      // Keep 1:1 order with `files`: generatedImageId[i] === product in files[i]
+      // (API: generatedImageId[image_index] for that batch row; image_index is 0-based)
+      const generatedImageIds = itemsToUpload.map(
+        (e) => e.generatedImageId?.trim() ?? "",
+      );
+      const tabIndexes = itemsToUpload.map((e) => e.index);
+      const missingIds = generatedImageIds.some((id) => !id);
 
-      if (generatedImageIds.length !== items.length) {
-        toast.message(
-          "Some rows have no image id — upload history may not link fully.",
+      if (missingIds) {
+        toast.error(
+          "Missing image id for one or more products. Cannot upload safely — regenerate or reload.",
         );
+        return;
+      }
+
+      if (process.env.NODE_ENV === "development") {
+        console.info("[Shopify upload pair]", {
+          pairs: itemsToUpload.map((e, i) => ({
+            tab: e.index,
+            title: e.product.title,
+            generatedImageId: generatedImageIds[i],
+            file: files[i]?.name,
+          })),
+        });
       }
 
       const res = await uploadMultipleCsv({
@@ -124,7 +147,10 @@ export function CsvShopifyUploadMenu({
       }).unwrap();
 
       dispatch(documentApi.util.invalidateTags(["Documents"]));
-      onUploadComplete?.(res, { generatedImageIds, tabIndexes });
+      onUploadComplete?.(res, {
+        generatedImageIds,
+        tabIndexes,
+      });
 
       const products = uploadResponseProducts(res);
       const summary = summarizeProductList(products);

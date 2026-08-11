@@ -12,11 +12,12 @@ import {
 import {
   buildImageDetailsPatchPayload,
   ensureShopifyExportFieldsOnPatch,
-  generatedImageIdForTabIndex,
   isPatchRowUpdateResponse,
   mergeParentDocumentWithPatchRow,
   normalizeDocumentApiData,
-  replaceGeneratedImageIdAtTabIndex,
+  replaceGeneratedImageIdAtImageIndex,
+  resolveGeneratedImageIdForBatchRow,
+  parseBatchImageIndex,
 } from "@/lib/document-api-helpers";
 import {
   deepClonePayload,
@@ -266,8 +267,12 @@ const AiResultContent: React.FC = () => {
     const activeTabForPatch =
       tabCountForPatch > 0 ? Math.min(activeTab, tabCountForPatch - 1) : 0;
     const idsForPatch = getGeneratedImageIdsForDocument(doc.id, localPayload);
-    const patchGeneratedImageId = generatedImageIdForTabIndex(
+    const activeRowForPatch = batchesForPatch[activeTabForPatch] as
+      | ImageBatchRow
+      | undefined;
+    const patchGeneratedImageId = resolveGeneratedImageIdForBatchRow(
       idsForPatch,
+      activeRowForPatch,
       activeTabForPatch,
     );
     if (!patchGeneratedImageId) {
@@ -282,9 +287,6 @@ const AiResultContent: React.FC = () => {
       );
       return false;
     }
-    const activeRowForPatch = batchesForPatch[activeTabForPatch] as
-      | ImageBatchRow
-      | undefined;
     if (!activeRowForPatch || typeof activeRowForPatch !== "object") {
       toast.error("No images_batch row for this tab.");
       return false;
@@ -316,9 +318,20 @@ const AiResultContent: React.FC = () => {
             res.data.imageDetails,
             activeTabForPatch,
           );
-          const mergedIds = replaceGeneratedImageIdAtTabIndex(
-            localPayload.generatedImageIds,
-            activeTabForPatch,
+          // Replace id at API image_index (0-based), not just UI tab slot
+          const imageIx =
+            parseBatchImageIndex(
+              res.data.imageDetails as Record<string, unknown>,
+            ) ??
+            parseBatchImageIndex(activeRowForPatch) ??
+            activeTabForPatch;
+          const baseIds =
+            localPayload.generatedImageIds ??
+            getGeneratedImageIdsForDocument(doc.id, localPayload) ??
+            [];
+          const mergedIds = replaceGeneratedImageIdAtImageIndex(
+            baseIds,
+            imageIx,
             res.data.id,
           );
           const nextPayload: StoredGeneratedPayload = {
@@ -458,7 +471,12 @@ const AiResultContent: React.FC = () => {
           published: data.published,
           shopifyStatus: data.shopifyStatus,
         },
-        generatedImageId: ids[index],
+        // Prefer row-linked / image_index mapping — not raw index only
+        generatedImageId: resolveGeneratedImageIdForBatchRow(
+          ids,
+          batch as Record<string, unknown>,
+          index,
+        ),
       };
     });
   }, [
@@ -468,6 +486,70 @@ const AiResultContent: React.FC = () => {
     skuByTab,
     priceByTab,
   ]);
+
+  /** Rebuild CSV entries from localStorage (sync) after save/PATCH so ids match product. */
+  const rebuildCsvEntriesFromStorage = useCallback(
+    (selected: TabCsvEntry[]): TabCsvEntry[] => {
+      const stored = loadGeneratedDocument();
+      if (!stored?.document) return selected;
+      const rows = extractImagesBatchFromDocument(stored.document);
+      const ids =
+        stored.generatedImageIds ??
+        getGeneratedImageIdsForDocument(stored.document.id, stored) ??
+        [];
+      const byIndex = new Map(
+        selected.map((s) => [s.index, s] as const),
+      );
+      const fresh: TabCsvEntry[] = [];
+      for (const sel of selected) {
+        const batch = rows[sel.index] as Record<string, unknown> | undefined;
+        if (!batch) {
+          fresh.push(sel);
+          continue;
+        }
+        const data = mapBatchItemToProductListingData(
+          batch,
+          stored.document,
+          modelPositions,
+        );
+        fresh.push({
+          index: sel.index,
+          product: data,
+          opts: {
+            sku: skuByTab[sel.index] ?? byIndex.get(sel.index)?.opts.sku ?? "",
+            price:
+              priceByTab[sel.index] ?? byIndex.get(sel.index)?.opts.price ?? "",
+            published: data.published,
+            shopifyStatus: data.shopifyStatus,
+          },
+          generatedImageId: resolveGeneratedImageIdForBatchRow(
+            ids,
+            batch,
+            sel.index,
+          ),
+        });
+      }
+      return fresh;
+    },
+    [modelPositions, skuByTab, priceByTab],
+  );
+
+  const handleSaveBeforeShopifyUpload = async (
+    items: TabCsvEntry[],
+  ): Promise<boolean | TabCsvEntry[]> => {
+    if (isUpdatingDocument || isSavingCsv) return false;
+    if (isEditing) {
+      const updated = await handleUpdateDocument();
+      if (!updated) return false;
+    }
+    // Drive save is best-effort for ai-result footer; don't block Shopify if CSV already correct
+    try {
+      await handleSaveToDrive();
+    } catch {
+      /* continue with Shopify even if S3 save fails after toast */
+    }
+    return rebuildCsvEntriesFromStorage(items);
+  };
 
   const buildActiveTabCsv = () =>
     buildShopifyProductImportCsv(productData, {
@@ -533,16 +615,6 @@ const AiResultContent: React.FC = () => {
     if (updated) {
       await handleSaveToDrive();
     }
-  };
-
-  /** Persist product before Shopify upload (edit → PATCH, then save CSV to drive). */
-  const handleSaveBeforeShopifyUpload = async (): Promise<boolean> => {
-    if (isUpdatingDocument || isSavingCsv) return false;
-    if (isEditing) {
-      const updated = await handleUpdateDocument();
-      if (!updated) return false;
-    }
-    return handleSaveToDrive();
   };
 
   const handleShopifyUploadComplete = (

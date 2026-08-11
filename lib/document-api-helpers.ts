@@ -66,6 +66,97 @@ export function generatedImageIdForTabIndex(
   return generatedImageIds[tabIndex];
 }
 
+/**
+ * 0-based image_index from a batch row, or null if missing.
+ * API contract: image_index starts at 0 (Image 1 tab → 0).
+ */
+export function parseBatchImageIndex(
+  batchRow: Record<string, unknown> | undefined,
+): number | null {
+  if (!batchRow) return null;
+  const raw = batchRow.image_index;
+  if (typeof raw === "number" && Number.isFinite(raw) && raw >= 0) {
+    return Math.floor(raw);
+  }
+  if (typeof raw === "string" && Number.isFinite(Number(raw))) {
+    const n = Number(raw);
+    if (n >= 0) return Math.floor(n);
+  }
+  return null;
+}
+
+/**
+ * Resolve Shopify/PATCH image id for one images_batch row.
+ *
+ * Create API contract (verified from real payloads):
+ * - `image_index` is **0-based**: 0, 1, 2, …
+ * - `generatedImageId[image_index]` belongs to that batch row
+ * - Never treat image_index as 1-based (that swaps every multi-product pair)
+ */
+export function resolveGeneratedImageIdForBatchRow(
+  generatedImageIds: string[] | undefined,
+  batchRow: Record<string, unknown> | undefined,
+  arrayIndex: number,
+): string | undefined {
+  const all = generatedImageIds ?? [];
+  if (!all.length) return undefined;
+
+  const known = new Set(
+    all.filter((x): x is string => typeof x === "string" && x.trim().length > 0),
+  );
+
+  if (batchRow) {
+    for (const key of [
+      "generated_image_id",
+      "generatedImageId",
+      "imageDocumentId",
+      "image_document_id",
+    ] as const) {
+      const v = batchRow[key];
+      if (typeof v === "string" && v.trim() && known.has(v.trim())) {
+        return v.trim();
+      }
+    }
+    const rowId = batchRow.id;
+    if (typeof rowId === "string" && rowId.trim() && known.has(rowId.trim())) {
+      return rowId.trim();
+    }
+
+    const imageIndex = parseBatchImageIndex(batchRow);
+    if (imageIndex != null && imageIndex < all.length) {
+      const id = all[imageIndex]?.trim();
+      if (id) return id;
+    }
+  }
+
+  const byArray = all[arrayIndex]?.trim();
+  return byArray || undefined;
+}
+
+/**
+ * After PATCH, update the id slot at the **API image_index** (0-based), not
+ * only the UI array position, so multi-row id arrays stay aligned.
+ */
+export function replaceGeneratedImageIdAtImageIndex(
+  ids: string[] | undefined,
+  imageIndex: number,
+  newId: string,
+): string[] {
+  const next = [...(ids ?? [])];
+  if (
+    imageIndex >= 0 &&
+    Number.isFinite(imageIndex) &&
+    typeof newId === "string" &&
+    newId.length > 0
+  ) {
+    // Grow array if needed (shouldn't, but keep safe)
+    while (next.length <= imageIndex) next.push("");
+    next[imageIndex] = newId;
+  }
+  return next;
+}
+
+
 /** PATCH success: `{ id, imageDetails, ... }` — not full nested create shape. */
 export function isPatchRowUpdateResponse(
   data: unknown,

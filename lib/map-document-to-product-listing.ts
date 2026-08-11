@@ -282,7 +282,8 @@ function pushImagesFromBatch(
   );
 }
 
-/** Pull `images_batch` rows from POST /documents `data.aiGenerated`. */
+/** Pull `images_batch` rows from POST /documents `data.aiGenerated`.
+ * Sorted by 0-based `image_index` so tab order matches generatedImageId[i]. */
 export function extractImagesBatchFromDocument(
   doc: SingleDocument,
 ): Record<string, unknown>[] {
@@ -291,9 +292,22 @@ export function extractImagesBatchFromDocument(
     | null
     | undefined;
   const batch = ai?.product?.images_batch;
-  return Array.isArray(batch)
-    ? batch.map((row) => row as Record<string, unknown>)
-    : [];
+  if (!Array.isArray(batch)) return [];
+  const rows = batch.map((row) => row as Record<string, unknown>);
+
+  const indexOf = (row: Record<string, unknown>): number => {
+    const raw = row.image_index;
+    if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+    if (typeof raw === "string" && Number.isFinite(Number(raw))) return Number(raw);
+    return Number.POSITIVE_INFINITY;
+  };
+
+  const allHaveIndex = rows.every(
+    (r) => Number.isFinite(indexOf(r)) && indexOf(r) !== Number.POSITIVE_INFINITY,
+  );
+  if (!allHaveIndex || rows.length <= 1) return rows;
+
+  return [...rows].sort((a, b) => indexOf(a) - indexOf(b));
 }
 
 function readAiRoot(doc: SingleDocument | null | undefined) {

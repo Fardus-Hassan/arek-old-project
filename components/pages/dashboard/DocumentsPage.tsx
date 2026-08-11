@@ -755,10 +755,6 @@ const DocumentsPage = () => {
   };
 
   const handleSaveBeforeShopifyUpload = async (): Promise<boolean> => {
-    if (!viewDocumentId || !detailDraft) {
-      toast.error("Nothing to save.");
-      return false;
-    }
     // Always persist current draft before Shopify upload.
     if (isDetailEditing || detailDraft) {
       return saveDetailEdit();
@@ -1111,7 +1107,12 @@ const DocumentsPage = () => {
 
       <Dialog
         open={isViewOpen}
+        /* When status history is open, release focus trap / body pointer-events
+           so the nested status modal can receive click + scroll. */
+        modal={!historyOpen}
         onOpenChange={(open) => {
+          // Don't close document details while history status sheet is open
+          if (!open && historyOpen) return;
           setIsViewOpen(open);
           if (!open) {
             setViewDocumentId(null);
@@ -1125,7 +1126,17 @@ const DocumentsPage = () => {
             setModalImmediateResults(undefined);
           }
         }}>
-        <DialogContent className="flex h-[90vh] w-[96vw] max-w-6xl flex-col overflow-hidden p-0">
+        <DialogContent
+          className="flex h-[90vh] w-[96vw] max-w-6xl flex-col overflow-hidden p-0"
+          onPointerDownOutside={(e) => {
+            if (historyOpen) e.preventDefault();
+          }}
+          onInteractOutside={(e) => {
+            if (historyOpen) e.preventDefault();
+          }}
+          onEscapeKeyDown={(e) => {
+            if (historyOpen) e.preventDefault();
+          }}>
           <DialogHeader className="shrink-0 space-y-0 p-4 sm:p-6 pb-3 border-b border-gray-100">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:pr-10">
               <div className="flex min-w-0 flex-wrap items-center gap-2">

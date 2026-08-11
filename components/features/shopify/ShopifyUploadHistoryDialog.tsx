@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { Loader2, X } from "lucide-react";
 import {
   useGetShopifyUploadHistoryQuery,
@@ -51,7 +52,8 @@ function filterHistoryRows(
 
 /**
  * Human-friendly Shopify upload history / result dialog.
- * Shows loading until history fetch finishes — never flash "empty" first.
+ * Portaled to document.body with high z-index so it works above Radix Document dialogs
+ * (click / scroll not blocked by parent modal focus trap).
  */
 export function ShopifyUploadHistoryDialog({
   open,
@@ -60,6 +62,26 @@ export function ShopifyUploadHistoryDialog({
   immediateResults,
   heading = "Shopify upload status",
 }: ShopifyUploadHistoryDialogProps) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Escape closes this sheet only
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        e.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [open, onClose]);
+
   const ids = useMemo(
     () => [...new Set(generatedImageIds.map((id) => id.trim()).filter(Boolean))],
     [generatedImageIds],
@@ -77,7 +99,6 @@ export function ShopifyUploadHistoryDialog({
   const { data, isLoading, isFetching, isUninitialized, error, isSuccess } =
     useGetShopifyUploadHistoryQuery(queryArgs, {
       skip: !open,
-      // Always re-fetch when dialog opens for current filters
       refetchOnMountOrArgChange: true,
     });
 
@@ -89,10 +110,6 @@ export function ShopifyUploadHistoryDialog({
 
   const hasImmediate = Boolean(immediateResults && immediateResults.length > 0);
 
-  /**
-   * Loading: first request, or any in-flight request before we have a finished
-   * success (so we never briefly show "no data" while fetching).
-   */
   const historyLoading =
     !hasImmediate &&
     open &&
@@ -111,19 +128,21 @@ export function ShopifyUploadHistoryDialog({
       ? "none"
       : overallFromHistory;
 
-  if (!open) return null;
+  if (!open || !mounted) return null;
 
-  return (
+  const panel = (
     <div
-      className="fixed inset-0 z-[80] flex items-end justify-center bg-black/45 p-0 sm:items-center sm:p-4"
+      className="pointer-events-auto fixed inset-0 z-[200] flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4"
       onClick={onClose}
-      role="presentation">
+      role="presentation"
+      data-shopify-history-dialog="">
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="shopify-history-dialog-title"
-        className="flex max-h-[min(92dvh,880px)] w-full max-w-xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:rounded-2xl"
-        onClick={(e) => e.stopPropagation()}>
+        className="pointer-events-auto flex max-h-[min(92dvh,880px)] w-full max-w-xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:rounded-2xl"
+        onClick={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}>
         <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 px-4 py-3 sm:px-5">
           <div className="min-w-0 space-y-1">
             <h2
@@ -157,7 +176,8 @@ export function ShopifyUploadHistoryDialog({
         <div
           data-lenis-prevent
           className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4 sm:px-5"
-          onWheel={(e) => e.stopPropagation()}>
+          onWheel={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}>
           {hasImmediate ? (
             <section className="space-y-3">
               <h3 className="text-sm font-semibold text-slate-800">
@@ -230,6 +250,8 @@ export function ShopifyUploadHistoryDialog({
       </div>
     </div>
   );
+
+  return createPortal(panel, document.body);
 }
 
 /** Shortcut label for document list when only boolean is known */

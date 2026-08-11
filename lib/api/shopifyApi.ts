@@ -110,11 +110,17 @@ export const shopifyApi = createApi({
         for (const file of files) {
           formData.append("files", file);
         }
-        const ids = (generatedImageIds ?? []).filter(Boolean);
-        if (ids.length > 0) {
+        /**
+         * Index-align ids with files. Do NOT strip empty slots — that desyncs
+         * generatedImageId[i] from files[i] and can attach history to the wrong product.
+         */
+        if (generatedImageIds && generatedImageIds.length > 0) {
+          const aligned = files.map((_, i) =>
+            String(generatedImageIds[i] ?? "").trim(),
+          );
           formData.append(
             "bodyData",
-            JSON.stringify({ generatedImageIds: ids }),
+            JSON.stringify({ generatedImageIds: aligned }),
           );
         }
         return {

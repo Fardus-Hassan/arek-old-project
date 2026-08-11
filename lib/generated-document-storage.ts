@@ -67,6 +67,10 @@ export function getGeneratedImageIdsForDocument(
   return loadGeneratedImageIdsSession(documentId);
 }
 
+/**
+ * Persist create payload. Keep full `generatedImageId` length/order —
+ * never shift indices (multi-product pairing needs image_index alignment).
+ */
 export function saveGeneratedDocument(
   document: SingleDocument,
   generatedImageIds?: string[] | null,
@@ -74,12 +78,16 @@ export function saveGeneratedDocument(
 ): void {
   if (typeof window === "undefined") return;
   try {
-    let ids = generatedImageIds?.filter(Boolean) ?? [];
+    let ids: string[] = Array.isArray(generatedImageIds)
+      ? generatedImageIds.map((x) =>
+          typeof x === "string" ? x.trim() : "",
+        )
+      : [];
     let lang = outputLanguage;
-    if (!ids.length || !lang) {
+    if ((!ids.some(Boolean) || !lang) && document?.id) {
       const prev = loadGeneratedDocument();
       if (prev?.document?.id === document.id) {
-        if (!ids.length && prev.generatedImageIds?.length) {
+        if (!ids.some(Boolean) && prev.generatedImageIds?.length) {
           ids = prev.generatedImageIds;
         }
         if (!lang && prev.outputLanguage) {
@@ -90,14 +98,14 @@ export function saveGeneratedDocument(
     const payload: StoredGeneratedPayload = {
       savedAt: new Date().toISOString(),
       document,
-      ...(ids.length ? { generatedImageIds: ids } : {}),
+      ...(ids.some(Boolean) ? { generatedImageIds: ids } : {}),
       ...(lang ? { outputLanguage: lang } : {}),
     };
     localStorage.setItem(
       GENERATED_DOCUMENT_STORAGE_KEY,
       JSON.stringify(payload),
     );
-    if (ids.length) persistGeneratedImageIdsSession(document.id, ids);
+    if (ids.some(Boolean)) persistGeneratedImageIdsSession(document.id, ids);
   } catch {
     // QuotaExceededError or private mode
   }
