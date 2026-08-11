@@ -12,8 +12,17 @@ import {
 } from "@/components/ui/popover";
 import type { TabCsvEntry } from "@/lib/download-product-csv";
 import { tabCsvEntriesToFiles } from "@/lib/download-product-csv";
-import { useUploadMultipleCsvMutation } from "@/lib/api/shopifyApi";
+import {
+  useUploadMultipleCsvMutation,
+  type ShopifyUploadMultipleResponse,
+} from "@/lib/api/shopifyApi";
+import { documentApi } from "@/lib/api/documentApi";
 import { getRtkQueryErrorMessage } from "@/lib/api/authApi";
+import { useAppDispatch } from "@/lib/hooks";
+import {
+  summarizeProductList,
+  uploadResponseProducts,
+} from "@/lib/shopify-upload-display";
 
 type CsvShopifyUploadMenuProps = {
   entries: TabCsvEntry[];
@@ -27,6 +36,11 @@ type CsvShopifyUploadMenuProps = {
   onBeforeUpload?: () => Promise<boolean>;
   /** Extra busy state while parent is saving */
   saving?: boolean;
+  /** Parent handles status UI + history (no response modal here). */
+  onUploadComplete?: (
+    res: ShopifyUploadMultipleResponse,
+    meta: { generatedImageIds: string[]; tabIndexes: number[] },
+  ) => void;
 };
 
 function entryLabel(entry: TabCsvEntry): string {
@@ -44,7 +58,9 @@ export function CsvShopifyUploadMenu({
   variant = "outline",
   onBeforeUpload,
   saving = false,
+  onUploadComplete,
 }: CsvShopifyUploadMenuProps) {
+  const dispatch = useAppDispatch();
   const [open, setOpen] = React.useState(false);
   const [selected, setSelected] = React.useState<Set<number>>(() => new Set());
   const [localBusy, setLocalBusy] = React.useState(false);
@@ -91,11 +107,43 @@ export function CsvShopifyUploadMenu({
         if (!ok) return;
       }
       const files = tabCsvEntriesToFiles(items);
-      const res = await uploadMultipleCsv({ files }).unwrap();
-      toast.success(
-        res.message ||
-          `Uploaded ${files.length} CSV file${files.length === 1 ? "" : "s"} to Shopify`,
-      );
+      const generatedImageIds = items
+        .map((e) => e.generatedImageId?.trim())
+        .filter((id): id is string => Boolean(id));
+      const tabIndexes = items.map((e) => e.index);
+
+      if (generatedImageIds.length !== items.length) {
+        toast.message(
+          "Some rows have no image id — upload history may not link fully.",
+        );
+      }
+
+      const res = await uploadMultipleCsv({
+        files,
+        generatedImageIds,
+      }).unwrap();
+
+      dispatch(documentApi.util.invalidateTags(["Documents"]));
+      onUploadComplete?.(res, { generatedImageIds, tabIndexes });
+
+      const products = uploadResponseProducts(res);
+      const summary = summarizeProductList(products);
+      if (summary === "failed") {
+        toast.error(
+          res.message ||
+            "Shopify upload failed — check the status badge for details",
+        );
+      } else if (summary === "partial") {
+        toast.message(
+          res.message ||
+            "Some products uploaded, some failed — click the status for details",
+        );
+      } else {
+        toast.success(
+          res.message ||
+            `Uploaded ${files.length} product${files.length === 1 ? "" : "s"} to Shopify`,
+        );
+      }
       setOpen(false);
     } catch (err) {
       toast.error(getRtkQueryErrorMessage(err));
@@ -114,9 +162,7 @@ export function CsvShopifyUploadMenu({
       <div
         className={cn(
           "inline-flex h-10 overflow-hidden rounded-xl border shadow-sm",
-          isOutline
-            ? "border-slate-200 bg-white"
-            : "border-[#A825C7]/30",
+          isOutline ? "border-slate-200 bg-white" : "border-[#A825C7]/30",
           className,
         )}>
         <button
@@ -172,9 +218,7 @@ export function CsvShopifyUploadMenu({
             <button
               type="button"
               disabled={busy || !activeEntry}
-              onClick={() =>
-                void runUpload(activeEntry ? [activeEntry] : [])
-              }
+              onClick={() => void runUpload(activeEntry ? [activeEntry] : [])}
               className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs hover:bg-slate-50 disabled:opacity-50">
               <Upload className="h-4 w-4 shrink-0 text-[#A825C7]" />
               <span>

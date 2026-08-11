@@ -13,6 +13,8 @@ export type TabCsvEntry = {
   index: number;
   product: ProductListingData;
   opts: ProductCsvOpts;
+  /** PATCH/list image row id for Shopify bodyData.generatedImageIds */
+  generatedImageId?: string;
 };
 
 export function buildProductListingCsv(

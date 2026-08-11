@@ -38,6 +38,23 @@ import {
 } from "@/lib/download-product-csv";
 import { CsvDownloadMenu } from "@/components/features/ai-result/CsvDownloadMenu";
 import { CsvShopifyUploadMenu } from "@/components/features/ai-result/CsvShopifyUploadMenu";
+import { ShopifyStatusPill } from "@/components/features/shopify/ShopifyStatusPill";
+import { ShopifyUploadHistoryDialog } from "@/components/features/shopify/ShopifyUploadHistoryDialog";
+import type {
+  ShopifyUploadMultipleResponse,
+  ShopifyUploadProductResult,
+} from "@/lib/api/shopifyApi";
+import {
+  summarizeProductList,
+  uploadResponseProducts,
+  statusHint,
+  type ShopifyUserStatus,
+} from "@/lib/shopify-upload-display";
+import {
+  loadShopifyStatusByDocument,
+  saveShopifyStatusByDocument,
+  type StoredShopifyByTab,
+} from "@/lib/shopify-status-storage";
 import {
   DEFAULT_SHOPIFY_PUBLISHED,
   DEFAULT_SHOPIFY_STATUS,
@@ -147,6 +164,16 @@ const AiResultContent: React.FC = () => {
   const [priceByTab, setPriceByTab] = useState<Record<number, string>>({});
   const [selectedImage, setSelectedImage] = useState(0);
   const [isSavingCsv, setIsSavingCsv] = useState(false);
+  /**
+   * Shopify status per Image/group tab — not global,
+   * so uploading Image 1 does not show status on Image 2.
+   */
+  const [shopifyByTab, setShopifyByTab] = useState<StoredShopifyByTab>({});
+  const [shopifyHistoryOpen, setShopifyHistoryOpen] = useState(false);
+  const [shopifyHistoryIds, setShopifyHistoryIds] = useState<string[]>([]);
+  const [shopifyHistoryImmediate, setShopifyHistoryImmediate] = useState<
+    ShopifyUploadProductResult[] | undefined
+  >(undefined);
   const [isEditingByTab, setIsEditingByTab] = useState<Record<number, boolean>>(
     {},
   );
@@ -169,6 +196,9 @@ const AiResultContent: React.FC = () => {
       );
       setSkuByTab(s);
       setPriceByTab(p);
+      // Restore per-tab Shopify badges after reload
+      const saved = loadShopifyStatusByDocument(prepared.document.id);
+      setShopifyByTab(saved);
     }
   }, []);
 
@@ -409,6 +439,10 @@ const AiResultContent: React.FC = () => {
 
   const csvEntries = useMemo((): TabCsvEntry[] => {
     if (!localPayload?.document || batches.length === 0) return [];
+    const ids =
+      localPayload.generatedImageIds ??
+      getGeneratedImageIdsForDocument(localPayload.document.id, localPayload) ??
+      [];
     return batches.map((batch, index) => {
       const data = mapBatchItemToProductListingData(
         batch,
@@ -424,9 +458,16 @@ const AiResultContent: React.FC = () => {
           published: data.published,
           shopifyStatus: data.shopifyStatus,
         },
+        generatedImageId: ids[index],
       };
     });
-  }, [batches, localPayload?.document, modelPositions, skuByTab, priceByTab]);
+  }, [
+    batches,
+    localPayload,
+    modelPositions,
+    skuByTab,
+    priceByTab,
+  ]);
 
   const buildActiveTabCsv = () =>
     buildShopifyProductImportCsv(productData, {
@@ -502,6 +543,58 @@ const AiResultContent: React.FC = () => {
       if (!updated) return false;
     }
     return handleSaveToDrive();
+  };
+
+  const handleShopifyUploadComplete = (
+    res: ShopifyUploadMultipleResponse,
+    meta: { generatedImageIds: string[]; tabIndexes: number[] },
+  ) => {
+    const products = uploadResponseProducts(res);
+    setShopifyByTab((prev) => {
+      const next: StoredShopifyByTab = { ...prev };
+      const tabs = meta.tabIndexes.length
+        ? meta.tabIndexes
+        : products.map((_, i) => i);
+
+      tabs.forEach((tabIdx, i) => {
+        const product = products[i];
+        const slice = product ? [product] : products;
+        const status = summarizeProductList(slice);
+        const idAt =
+          meta.generatedImageIds[i] ??
+          meta.generatedImageIds.find(Boolean);
+        next[tabIdx] = {
+          status: status === "none" ? "success" : status,
+          immediateResults: slice,
+          generatedImageIds: idAt
+            ? [idAt]
+            : meta.generatedImageIds.filter(Boolean),
+          updatedAt: new Date().toISOString(),
+        };
+      });
+
+      const docId = localPayload?.document?.id;
+      if (docId) {
+        saveShopifyStatusByDocument(docId, next);
+      }
+      return next;
+    });
+  };
+
+  const activeShopify = shopifyByTab[safeActiveTab];
+
+  const openShopifyHistoryForCurrent = () => {
+    const tabState = shopifyByTab[safeActiveTab];
+    const idFromEntry = csvEntries[safeActiveTab]?.generatedImageId?.trim();
+    const ids =
+      tabState?.generatedImageIds?.length
+        ? tabState.generatedImageIds
+        : idFromEntry
+          ? [idFromEntry]
+          : [];
+    setShopifyHistoryIds(ids);
+    setShopifyHistoryImmediate(tabState?.immediateResults);
+    setShopifyHistoryOpen(true);
   };
 
   return (
@@ -603,14 +696,39 @@ const AiResultContent: React.FC = () => {
                 variant="outline"
                 className="h-10 shrink-0"
               />
-              <CsvShopifyUploadMenu
-                entries={csvEntries}
-                activeTabIndex={safeActiveTab}
-                variant="outline"
-                className="h-10 shrink-0"
-                saving={isUpdatingDocument || isSavingCsv}
-                onBeforeUpload={handleSaveBeforeShopifyUpload}
-              />
+              <div className="flex shrink-0 items-center gap-2">
+                <CsvShopifyUploadMenu
+                  entries={csvEntries}
+                  activeTabIndex={safeActiveTab}
+                  variant="outline"
+                  className="h-10 shrink-0"
+                  saving={isUpdatingDocument || isSavingCsv}
+                  onBeforeUpload={handleSaveBeforeShopifyUpload}
+                  onUploadComplete={handleShopifyUploadComplete}
+                />
+                {activeShopify ? (
+                  <div className="hidden min-w-0 flex-col items-start sm:flex">
+                    <ShopifyStatusPill
+                      status={activeShopify.status}
+                      onClick={openShopifyHistoryForCurrent}
+                    />
+                    <span className="mt-0.5 max-w-[9rem] truncate text-[10px] text-slate-500">
+                      Click for details
+                    </span>
+                  </div>
+                ) : null}
+              </div>
+              {activeShopify ? (
+                <div className="flex w-full basis-full items-center justify-between gap-2 sm:hidden">
+                  <span className="text-xs text-slate-600">
+                    Shopify: {statusHint(activeShopify.status)}
+                  </span>
+                  <ShopifyStatusPill
+                    status={activeShopify.status}
+                    onClick={openShopifyHistoryForCurrent}
+                  />
+                </div>
+              ) : null}
               {isEditing ? (
                 <>
                   <button
@@ -659,6 +777,17 @@ const AiResultContent: React.FC = () => {
           }
         />
       </div>
+
+      <ShopifyUploadHistoryDialog
+        open={shopifyHistoryOpen}
+        onClose={() => {
+          setShopifyHistoryOpen(false);
+          setShopifyHistoryImmediate(undefined);
+        }}
+        generatedImageIds={shopifyHistoryIds}
+        immediateResults={shopifyHistoryImmediate}
+        heading="Shopify upload status"
+      />
     </div>
   );
 };

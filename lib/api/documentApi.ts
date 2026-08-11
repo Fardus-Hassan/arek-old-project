@@ -22,6 +22,8 @@ export type DocumentListItem = {
   isModel: boolean;
   isMannequin: boolean;
   isImageDiagram: boolean;
+  /** Whether this document was uploaded to Shopify */
+  isShopifyUploaded?: boolean;
   dateFormat: string;
 };
 

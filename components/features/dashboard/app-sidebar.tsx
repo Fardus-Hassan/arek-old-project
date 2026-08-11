@@ -19,6 +19,7 @@ import {
   LogOut,
   FolderOpen,
   Settings,
+  ShoppingBag,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -30,6 +31,7 @@ import { adminApi } from "@/lib/api/adminApi";
 import { documentApi } from "@/lib/api/documentApi";
 import { fileSaveApi } from "@/lib/api/fileSaveApi";
 import { featureApi } from "@/lib/api/featureApi";
+import { shopifyApi } from "@/lib/api/shopifyApi";
 import { LOGIN_PATH, ROLE_SUPERADMIN } from "@/lib/auth-constants";
 import { clearAuthSession, getUserRole } from "@/lib/auth-session";
 
@@ -70,6 +72,12 @@ const allNavigationItems = [
     icon: Settings,
     superAdminOnly: true,
   },
+  {
+    label: "Shopify uploads",
+    href: "/dashboard/admin/shopify-uploads",
+    icon: ShoppingBag,
+    superAdminOnly: false,
+  },
 ] as const;
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
@@ -100,6 +108,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     dispatch(documentApi.util.resetApiState());
     dispatch(fileSaveApi.util.resetApiState());
     dispatch(featureApi.util.resetApiState());
+    dispatch(shopifyApi.util.resetApiState());
     router.push(LOGIN_PATH);
   };
 

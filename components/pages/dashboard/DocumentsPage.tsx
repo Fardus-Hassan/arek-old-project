@@ -44,10 +44,18 @@ import {
 } from "@/components/features/product-listing/ProductListingPanel";
 import { CompactProductEditor } from "@/components/features/product-listing/CompactProductEditor";
 import { CsvShopifyUploadMenu } from "@/components/features/ai-result/CsvShopifyUploadMenu";
+import { ShopifyStatusPill } from "@/components/features/shopify/ShopifyStatusPill";
+import { ShopifyUploadHistoryDialog } from "@/components/features/shopify/ShopifyUploadHistoryDialog";
 import {
   downloadProductListingCsv,
   type TabCsvEntry,
 } from "@/lib/download-product-csv";
+import type { ShopifyUploadMultipleResponse, ShopifyUploadProductResult } from "@/lib/api/shopifyApi";
+import {
+  summarizeProductList,
+  uploadResponseProducts,
+  type ShopifyUserStatus,
+} from "@/lib/shopify-upload-display";
 import {
   ensureShopifyExportFieldsOnPatch,
   buildImageDetailsPatchPayload,
@@ -569,6 +577,19 @@ const DocumentsPage = () => {
   const [selectedImage, setSelectedImage] = useState(0);
   const modalScrollRef = useRef<HTMLDivElement | null>(null);
 
+  /** Shopify history dialog (table badge / document modal status) */
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyIds, setHistoryIds] = useState<string[]>([]);
+  const [historyImmediate, setHistoryImmediate] = useState<
+    ShopifyUploadProductResult[] | undefined
+  >(undefined);
+  /** Last upload summary for open document modal header */
+  const [modalUploadStatus, setModalUploadStatus] =
+    useState<ShopifyUserStatus | null>(null);
+  const [modalImmediateResults, setModalImmediateResults] = useState<
+    ShopifyUploadProductResult[] | undefined
+  >(undefined);
+
   const { state: sidebarState } = useSidebar();
   const isSidebarOpen = sidebarState === "expanded";
 
@@ -586,6 +607,29 @@ const DocumentsPage = () => {
 
   const documents = data?.data ?? [];
   const totalItems = data?.meta?.total ?? 0;
+
+  const openShopifyHistory = (
+    ids: string[],
+    immediate?: ShopifyUploadProductResult[],
+  ) => {
+    setHistoryIds(ids.filter(Boolean));
+    setHistoryImmediate(immediate);
+    setHistoryOpen(true);
+  };
+
+  const handleDocumentShopifyUploadComplete = (
+    res: ShopifyUploadMultipleResponse,
+  ) => {
+    const products = uploadResponseProducts(res);
+    setModalImmediateResults(products);
+    setModalUploadStatus(summarizeProductList(products));
+  };
+
+  const modalShopifyStatus: ShopifyUserStatus = (() => {
+    if (modalUploadStatus) return modalUploadStatus;
+    const listDoc = documents.find((d) => d.id === viewDocumentId);
+    return listDoc?.isShopifyUploaded ? "success" : "none";
+  })();
   const totalPages =
     data?.meta?.totalPage ??
     data?.meta?.totalPages ??
@@ -816,9 +860,10 @@ const DocumentsPage = () => {
           published: productData.published,
           shopifyStatus: productData.shopifyStatus,
         },
+        generatedImageId: viewDocumentId ?? undefined,
       },
     ];
-  }, [productData, productPrice, productSku]);
+  }, [productData, productPrice, productSku, viewDocumentId]);
 
   return (
     <div className="w-full">
@@ -879,6 +924,9 @@ const DocumentsPage = () => {
                 <TableHead className="min-w-[100px] text-gray-600 font-medium text-center py-3 px-4 whitespace-nowrap">
                   Mannequin
                 </TableHead>
+                <TableHead className="min-w-[130px] text-gray-600 font-medium text-center py-3 px-4 whitespace-nowrap">
+                  Shopify
+                </TableHead>
                 <TableHead className="min-w-[120px] text-right text-gray-600 font-medium py-3 px-4 whitespace-nowrap">
                   Action
                 </TableHead>
@@ -893,6 +941,7 @@ const DocumentsPage = () => {
                     <TableCell className="py-3 px-4"><Skeleton className="h-4 w-28" /></TableCell>
                     <TableCell className="py-3 px-4 text-center"><Skeleton className="h-4 w-8 mx-auto" /></TableCell>
                     <TableCell className="py-3 px-4 text-center"><Skeleton className="h-4 w-8 mx-auto" /></TableCell>
+                    <TableCell className="py-3 px-4 text-center"><Skeleton className="h-5 w-16 mx-auto" /></TableCell>
                     <TableCell className="py-3 px-4 text-right"><Skeleton className="h-8 w-16 ml-auto" /></TableCell>
                   </TableRow>
                 ))
@@ -915,6 +964,17 @@ const DocumentsPage = () => {
                   </TableCell>
                   <TableCell className="text-center text-gray-700 py-3 px-4 whitespace-nowrap">
                     {doc.isMannequin ? "Yes" : "No"}
+                  </TableCell>
+                  <TableCell className="text-center py-3 px-4 whitespace-nowrap">
+                    <ShopifyStatusPill
+                      status={doc.isShopifyUploaded ? "success" : "none"}
+                      onClick={() =>
+                        openShopifyHistory(
+                          [doc.id],
+                          undefined,
+                        )
+                      }
+                    />
                   </TableCell>
                   <TableCell className="text-right py-3 px-4">
                     <div className="flex items-center justify-end gap-2">
@@ -939,7 +999,7 @@ const DocumentsPage = () => {
               ))}
               {!isLoading && documents.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-8 text-center text-gray-500">
+                  <TableCell colSpan={7} className="py-8 text-center text-gray-500">
                     No documents found.
                   </TableCell>
                 </TableRow>
@@ -1005,6 +1065,15 @@ const DocumentsPage = () => {
               </div>
             </div>
 
+            {/* Shopify upload status */}
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-gray-500">Shopify</span>
+              <ShopifyStatusPill
+                status={doc.isShopifyUploaded ? "success" : "none"}
+                onClick={() => openShopifyHistory([doc.id])}
+              />
+            </div>
+
             {/* Actions */}
             <div className="flex gap-2 pt-2">
               <Button
@@ -1052,14 +1121,29 @@ const DocumentsPage = () => {
             setDetailSnapshot(null);
             setIsDetailEditing(false);
             setIsSavingDetail(false);
+            setModalUploadStatus(null);
+            setModalImmediateResults(undefined);
           }
         }}>
         <DialogContent className="flex h-[90vh] w-[96vw] max-w-6xl flex-col overflow-hidden p-0">
           <DialogHeader className="shrink-0 space-y-0 p-4 sm:p-6 pb-3 border-b border-gray-100">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:pr-10">
-              <DialogTitle className="text-base sm:text-lg">
-                Document details
-              </DialogTitle>
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <DialogTitle className="text-base sm:text-lg">
+                  Document details
+                </DialogTitle>
+                {!isViewing && viewDocumentId ? (
+                  <ShopifyStatusPill
+                    status={modalShopifyStatus}
+                    onClick={() =>
+                      openShopifyHistory(
+                        viewDocumentId ? [viewDocumentId] : [],
+                        modalImmediateResults,
+                      )
+                    }
+                  />
+                ) : null}
+              </div>
               {!isViewing &&
                 imageDetailsOnly &&
                 displayImageDetails &&
@@ -1083,6 +1167,7 @@ const DocumentsPage = () => {
                           className="h-9"
                           saving={isSavingDetail}
                           onBeforeUpload={handleSaveBeforeShopifyUpload}
+                          onUploadComplete={handleDocumentShopifyUploadComplete}
                         />
                       </>
                     )}
@@ -1194,6 +1279,17 @@ const DocumentsPage = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      <ShopifyUploadHistoryDialog
+        open={historyOpen}
+        onClose={() => {
+          setHistoryOpen(false);
+          setHistoryImmediate(undefined);
+        }}
+        generatedImageIds={historyIds}
+        immediateResults={historyImmediate}
+        heading="Shopify upload status"
+      />
     </div>
   );
 };
