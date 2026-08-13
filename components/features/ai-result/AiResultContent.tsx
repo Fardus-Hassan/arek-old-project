@@ -43,7 +43,6 @@ import { ShopifyStatusPill } from "@/components/features/shopify/ShopifyStatusPi
 import { ShopifyUploadHistoryDialog } from "@/components/features/shopify/ShopifyUploadHistoryDialog";
 import type {
   ShopifyUploadMultipleResponse,
-  ShopifyUploadProductResult,
 } from "@/lib/api/shopifyApi";
 import {
   summarizeProductList,
@@ -172,9 +171,6 @@ const AiResultContent: React.FC = () => {
   const [shopifyByTab, setShopifyByTab] = useState<StoredShopifyByTab>({});
   const [shopifyHistoryOpen, setShopifyHistoryOpen] = useState(false);
   const [shopifyHistoryIds, setShopifyHistoryIds] = useState<string[]>([]);
-  const [shopifyHistoryImmediate, setShopifyHistoryImmediate] = useState<
-    ShopifyUploadProductResult[] | undefined
-  >(undefined);
   const [isEditingByTab, setIsEditingByTab] = useState<Record<number, boolean>>(
     {},
   );
@@ -665,7 +661,6 @@ const AiResultContent: React.FC = () => {
           ? [idFromEntry]
           : [];
     setShopifyHistoryIds(ids);
-    setShopifyHistoryImmediate(tabState?.immediateResults);
     setShopifyHistoryOpen(true);
   };
 
@@ -854,10 +849,8 @@ const AiResultContent: React.FC = () => {
         open={shopifyHistoryOpen}
         onClose={() => {
           setShopifyHistoryOpen(false);
-          setShopifyHistoryImmediate(undefined);
         }}
         generatedImageIds={shopifyHistoryIds}
-        immediateResults={shopifyHistoryImmediate}
         heading="Shopify upload status"
       />
     </div>
