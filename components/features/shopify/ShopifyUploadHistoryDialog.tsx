@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Loader2, X } from "lucide-react";
 import {
+  useGetShopifyUploadHistoryByDocumentIdQuery,
   useGetShopifyUploadHistoryQuery,
   type ShopifyUploadHistoryRecord,
   type ShopifyUploadProductResult,
@@ -26,12 +27,16 @@ export type ShopifyUploadHistoryDialogProps = {
   open: boolean;
   onClose: () => void;
   /**
-   * Prefer history rows linked to these generated-image (or document) ids.
+   * My Document table / details: GET /shopify/upload-history/document/:documentId
+   */
+  documentId?: string | null;
+  /**
+   * ai-result (and similar): filter general history by generated-image ids.
+   * Ignored when `documentId` is set.
    */
   generatedImageIds?: string[];
   /**
    * Fresh results from POST /shopify/upload-multiple-csv
-   * (shown immediately without waiting for history).
    */
   immediateResults?: ShopifyUploadProductResult[];
   heading?: string;
@@ -52,12 +57,11 @@ function filterHistoryRows(
 
 /**
  * Human-friendly Shopify upload history / result dialog.
- * Portaled to document.body with high z-index so it works above Radix Document dialogs
- * (click / scroll not blocked by parent modal focus trap).
  */
 export function ShopifyUploadHistoryDialog({
   open,
   onClose,
+  documentId = null,
   generatedImageIds = [],
   immediateResults,
   heading = "Shopify upload status",
@@ -68,7 +72,6 @@ export function ShopifyUploadHistoryDialog({
     setMounted(true);
   }, []);
 
-  // Escape closes this sheet only
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -81,6 +84,9 @@ export function ShopifyUploadHistoryDialog({
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
   }, [open, onClose]);
+
+  const docId = documentId?.trim() || "";
+  const useByDocument = Boolean(docId);
 
   const ids = useMemo(
     () => [...new Set(generatedImageIds.map((id) => id.trim()).filter(Boolean))],
@@ -96,17 +102,34 @@ export function ShopifyUploadHistoryDialog({
     [ids],
   );
 
-  const { data, isLoading, isFetching, isUninitialized, error, isSuccess } =
-    useGetShopifyUploadHistoryQuery(queryArgs, {
-      skip: !open,
-      refetchOnMountOrArgChange: true,
-    });
+  const byDoc = useGetShopifyUploadHistoryByDocumentIdQuery(docId, {
+    skip: !open || !useByDocument,
+    refetchOnMountOrArgChange: true,
+  });
 
-  const allRows = data?.data ?? [];
-  const filtered = useMemo(
-    () => (ids.length ? filterHistoryRows(allRows, ids) : allRows),
-    [allRows, ids],
-  );
+  const byList = useGetShopifyUploadHistoryQuery(queryArgs, {
+    skip: !open || useByDocument,
+    refetchOnMountOrArgChange: true,
+  });
+
+  const active = useByDocument ? byDoc : byList;
+
+  /**
+   * Prefer `currentData` so a previous document/query never flashes while
+   * the new request is in flight (same pattern as Shopify uploads detail).
+   */
+  const currentPayload = active.currentData;
+  const isLoading = active.isLoading;
+  const isFetching = active.isFetching;
+  const isUninitialized = active.isUninitialized;
+  const error = active.error;
+
+  const allRows = currentPayload?.data ?? [];
+
+  const filtered = useMemo(() => {
+    if (useByDocument) return allRows;
+    return ids.length ? filterHistoryRows(allRows, ids) : allRows;
+  }, [useByDocument, allRows, ids]);
 
   const hasImmediate = Boolean(immediateResults && immediateResults.length > 0);
 
@@ -115,8 +138,8 @@ export function ShopifyUploadHistoryDialog({
     open &&
     (isUninitialized ||
       isLoading ||
-      (isFetching && !isSuccess) ||
-      (isFetching && filtered.length === 0 && !error));
+      (isFetching && !currentPayload) ||
+      (!currentPayload && !error));
 
   const overallFromImmediate = hasImmediate
     ? summarizeProductList(immediateResults!)
@@ -130,9 +153,14 @@ export function ShopifyUploadHistoryDialog({
 
   if (!open || !mounted) return null;
 
+  const scopedLabel =
+    useByDocument || ids.length
+      ? "History for this product"
+      : "Recent uploads";
+
   const panel = (
     <div
-      className="pointer-events-auto fixed inset-0 z-[200] flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4"
+      className="pointer-events-auto fixed inset-0 z-[200] flex items-end justify-center bg-black/80 p-0 sm:items-center sm:p-4 animate-in fade-in-0 duration-200"
       onClick={onClose}
       role="presentation"
       data-shopify-history-dialog="">
@@ -140,7 +168,7 @@ export function ShopifyUploadHistoryDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="shopify-history-dialog-title"
-        className="pointer-events-auto flex max-h-[min(92dvh,880px)] w-full max-w-xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:rounded-2xl"
+        className="pointer-events-auto flex max-h-[min(92dvh,880px)] w-full max-w-xl flex-col overflow-hidden rounded-t-2xl border bg-white shadow-lg animate-in fade-in-0 zoom-in-95 duration-200 sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
         onPointerDown={(e) => e.stopPropagation()}>
         <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 px-4 py-3 sm:px-5">
@@ -193,11 +221,9 @@ export function ShopifyUploadHistoryDialog({
           ) : null}
 
           <section className="space-y-3">
-            <div className="flex items-center justify-between gap-2">
-              <h3 className="text-sm font-semibold text-slate-800">
-                {ids.length ? "History for this product" : "Recent uploads"}
-              </h3>
-            </div>
+            <h3 className="text-sm font-semibold text-slate-800">
+              {scopedLabel}
+            </h3>
 
             {historyLoading ? (
               <div className="space-y-3" aria-busy="true" aria-live="polite">
@@ -215,7 +241,7 @@ export function ShopifyUploadHistoryDialog({
             ) : filtered.length === 0 ? (
               <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center">
                 <p className="text-sm font-medium text-slate-700">
-                  {ids.length
+                  {useByDocument || ids.length
                     ? "No Shopify upload history for this item yet."
                     : "No uploads yet."}
                 </p>
@@ -254,7 +280,6 @@ export function ShopifyUploadHistoryDialog({
   return createPortal(panel, document.body);
 }
 
-/** Shortcut label for document list when only boolean is known */
 export function listDocShopifyStatus(
   isShopifyUploaded?: boolean,
 ): "success" | "none" {

@@ -159,6 +159,38 @@ export const shopifyApi = createApi({
         "ShopifyUploadHistory",
       ],
     }),
+
+    /**
+     * GET /shopify/upload-history/document/:documentId
+     * Same envelope shape as GET /shopify/upload-history/:id —
+     * `data` is one record (or occasionally an array).
+     */
+    getShopifyUploadHistoryByDocumentId: builder.query<
+      ApiEnvelope<ShopifyUploadHistoryRecord[]>,
+      string
+    >({
+      query: (documentId) => ({
+        url: `/shopify/upload-history/document/${documentId}`,
+        method: "GET",
+      }),
+      transformResponse: (
+        response: ApiEnvelope<
+          ShopifyUploadHistoryRecord | ShopifyUploadHistoryRecord[] | null
+        >,
+      ): ApiEnvelope<ShopifyUploadHistoryRecord[]> => {
+        const raw = response?.data;
+        const list = Array.isArray(raw)
+          ? raw
+          : raw && typeof raw === "object"
+            ? [raw]
+            : [];
+        return { ...response, data: list };
+      },
+      providesTags: (_r, _e, documentId) => [
+        { type: "ShopifyUploadHistory", id: `doc-${documentId}` },
+        "ShopifyUploadHistory",
+      ],
+    }),
   }),
 });
 
@@ -167,4 +199,5 @@ export const {
   useGetShopifyUploadHistoryQuery,
   useGetShopifyUploadHistoryByIdQuery,
   useLazyGetShopifyUploadHistoryByIdQuery,
+  useGetShopifyUploadHistoryByDocumentIdQuery,
 } = shopifyApi;

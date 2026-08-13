@@ -579,7 +579,9 @@ const DocumentsPage = () => {
 
   /** Shopify history dialog (table badge / document modal status) */
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [historyIds, setHistoryIds] = useState<string[]>([]);
+  const [historyDocumentId, setHistoryDocumentId] = useState<string | null>(
+    null,
+  );
   const [historyImmediate, setHistoryImmediate] = useState<
     ShopifyUploadProductResult[] | undefined
   >(undefined);
@@ -609,10 +611,10 @@ const DocumentsPage = () => {
   const totalItems = data?.meta?.total ?? 0;
 
   const openShopifyHistory = (
-    ids: string[],
+    documentId: string,
     immediate?: ShopifyUploadProductResult[],
   ) => {
-    setHistoryIds(ids.filter(Boolean));
+    setHistoryDocumentId(documentId.trim() || null);
     setHistoryImmediate(immediate);
     setHistoryOpen(true);
   };
@@ -964,12 +966,7 @@ const DocumentsPage = () => {
                   <TableCell className="text-center py-3 px-4 whitespace-nowrap">
                     <ShopifyStatusPill
                       status={doc.isShopifyUploaded ? "success" : "none"}
-                      onClick={() =>
-                        openShopifyHistory(
-                          [doc.id],
-                          undefined,
-                        )
-                      }
+                      onClick={() => openShopifyHistory(doc.id)}
                     />
                   </TableCell>
                   <TableCell className="text-right py-3 px-4">
@@ -1066,7 +1063,7 @@ const DocumentsPage = () => {
               <span className="text-xs text-gray-500">Shopify</span>
               <ShopifyStatusPill
                 status={doc.isShopifyUploaded ? "success" : "none"}
-                onClick={() => openShopifyHistory([doc.id])}
+                onClick={() => openShopifyHistory(doc.id)}
               />
             </div>
 
@@ -1146,12 +1143,13 @@ const DocumentsPage = () => {
                 {!isViewing && viewDocumentId ? (
                   <ShopifyStatusPill
                     status={modalShopifyStatus}
-                    onClick={() =>
+                    onClick={() => {
+                      if (!viewDocumentId) return;
                       openShopifyHistory(
-                        viewDocumentId ? [viewDocumentId] : [],
+                        viewDocumentId,
                         modalImmediateResults,
-                      )
-                    }
+                      );
+                    }}
                   />
                 ) : null}
               </div>
@@ -1295,9 +1293,10 @@ const DocumentsPage = () => {
         open={historyOpen}
         onClose={() => {
           setHistoryOpen(false);
+          setHistoryDocumentId(null);
           setHistoryImmediate(undefined);
         }}
-        generatedImageIds={historyIds}
+        documentId={historyDocumentId}
         immediateResults={historyImmediate}
         heading="Shopify upload status"
       />
