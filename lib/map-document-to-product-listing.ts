@@ -236,7 +236,7 @@ function pushImagesFromBatch(
 
   add(
     batch.background_removed_url,
-    "Background removed",
+    "Front",
     "background_removal",
   );
   add(batch.backpart_image, "Back");

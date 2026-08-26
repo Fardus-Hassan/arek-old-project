@@ -88,7 +88,7 @@ const FALLBACK_PRODUCT_DATA: ProductListingData = {
     images: [
       {
         url: "",
-        label: "Background removed",
+        label: "Front",
         sku: "SKU-000123456_1",
       },
       {

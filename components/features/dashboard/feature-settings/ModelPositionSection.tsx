@@ -31,7 +31,7 @@ export const EXPECTED_MODEL_POSITION_NAMES = [
   "Model",
   "Virtual try on",
   "Measurement diagram",
-  "Background Removed",
+  "Front",
   "Back",
   "Mannequin",
 ] as const;
