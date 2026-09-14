@@ -49,11 +49,9 @@ export const FEATURE_OPTIONS: FeatureOption[] = [
   },
 ];
 
-/** Pre-selected for every new group (excludes Image diagram). */
+/** Pre-selected for every new group. */
 export const DEFAULT_GROUP_FEATURE_IDS = [
-  "dimensions",
   "try-on",
-  "mannequin",
   "removal",
   "model",
 ] as const;
