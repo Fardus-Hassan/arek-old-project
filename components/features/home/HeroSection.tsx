@@ -5,34 +5,36 @@ import { Plus } from "lucide-react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { useCreateDocumentMutation } from "@/lib/api/documentApi";
+import { useUploadProductToAiMutation } from "@/lib/api/documentApi";
 import { getRtkQueryErrorMessage } from "@/lib/api/authApi";
+import { clearGeneratedDocument } from "@/lib/generated-document-storage";
 import {
-  clearGeneratedDocument,
-  saveGeneratedDocument,
-} from "@/lib/generated-document-storage";
-import { markFabricFeaturePending } from "@/lib/fabric-feature-pending";
-import { normalizeDocumentApiData } from "@/lib/document-api-helpers";
+  DEFAULT_POLL_SECONDS,
+  saveActiveProductId,
+} from "@/lib/ai-product-helpers";
 import { mapGarmentOptionToApi } from "@/lib/garment-feature-map";
-import { DEFAULT_GROUP_FEATURE_IDS, DEFAULT_OUTPUT_LANGUAGE } from "./feature-options";
+import {
+  DEFAULT_GROUP_FEATURE_IDS,
+  DEFAULT_OUTPUT_LANGUAGE,
+} from "./feature-options";
 import { persistGenerationLanguage } from "@/lib/feature-catalog";
 import { ImageGroupCard } from "./ImageGroupCard";
 import { BulkUploadSection } from "./BulkUploadSection";
 import { StickyFeatureBar } from "./StickyFeatureBar";
 import {
   createEmptyGroup,
+  revokeGroupTagPreviews,
   type GroupGender,
   type GroupSlot,
   type GroupType,
   type ImageGroup,
 } from "./image-group-types";
-import {
-  spillFilesIntoGroups,
-} from "./bulk-group-upload";
+import { spillFilesIntoGroups } from "./bulk-group-upload";
 
 function revokeGroupPreviews(group: ImageGroup) {
   if (group.frontPreview) URL.revokeObjectURL(group.frontPreview);
   if (group.backPreview) URL.revokeObjectURL(group.backPreview);
+  revokeGroupTagPreviews(group);
 }
 
 function isGroupComplete(group: ImageGroup): boolean {
@@ -46,8 +48,8 @@ const HeroSection = () => {
     DEFAULT_OUTPUT_LANGUAGE,
   );
   const router = useRouter();
-  const [createDocument, { isLoading: isGenerating }] =
-    useCreateDocumentMutation();
+  const [uploadProductToAi, { isLoading: isGenerating }] =
+    useUploadProductToAiMutation();
 
   const groupsRef = useRef(groups);
   groupsRef.current = groups;
@@ -114,6 +116,32 @@ const HeroSection = () => {
     }));
   };
 
+  const handleAddClothingTags = (groupId: string, files: File[]) => {
+    if (files.length === 0) return;
+    updateGroup(groupId, (group) => ({
+      ...group,
+      clothingTags: [...group.clothingTags, ...files],
+      clothingTagPreviews: [
+        ...group.clothingTagPreviews,
+        ...files.map((f) => URL.createObjectURL(f)),
+      ],
+    }));
+  };
+
+  const handleRemoveClothingTag = (groupId: string, tagIndex: number) => {
+    updateGroup(groupId, (group) => {
+      const oldUrl = group.clothingTagPreviews[tagIndex];
+      if (oldUrl) URL.revokeObjectURL(oldUrl);
+      return {
+        ...group,
+        clothingTags: group.clothingTags.filter((_, i) => i !== tagIndex),
+        clothingTagPreviews: group.clothingTagPreviews.filter(
+          (_, i) => i !== tagIndex,
+        ),
+      };
+    });
+  };
+
   const handleSlotFiles = (
     groupId: string,
     slot: GroupSlot,
@@ -126,18 +154,14 @@ const HeroSection = () => {
     }
     const groupIndex = groups.findIndex((g) => g.id === groupId);
     if (groupIndex < 0) return;
-    setGroups((prev) =>
-      spillFilesIntoGroups(prev, groupIndex, slot, files),
-    );
+    setGroups((prev) => spillFilesIntoGroups(prev, groupIndex, slot, files));
   };
 
   const applyBulkGroups = (newGroups: ImageGroup[]) => {
     if (newGroups.length === 0) return;
     const existingCount = groups.filter((g) => g.front || g.back).length;
     setGroups((prev) => {
-      prev
-        .filter((g) => !g.front && !g.back)
-        .forEach(revokeGroupPreviews);
+      prev.filter((g) => !g.front && !g.back).forEach(revokeGroupPreviews);
       const existing = prev.filter((g) => g.front || g.back);
       return [...existing, ...newGroups];
     });
@@ -197,19 +221,17 @@ const HeroSection = () => {
 
     const allComplete = groups.every(isGroupComplete);
     if (!allComplete) {
-      toast.error(
-        "Each group must include both a Front and a Back image.",
-      );
+      toast.error("Each group must include both a Front and a Back image.");
       return;
     }
 
     clearGeneratedDocument();
-    sessionStorage.setItem("generationStartedAt", new Date().toISOString());
     persistGenerationLanguage(language);
-    router.push("/analyzing");
 
     const images = groups.map((g) => g.front!);
     const backpartImages = groups.map((g) => g.back!);
+    const clothingTags = groups.flatMap((g) => g.clothingTags);
+    const clothing_tags_count = groups.map((g) => g.clothingTags.length);
     const bodyData = JSON.stringify({
       features: groups.map((g) => ({
         features:
@@ -220,25 +242,30 @@ const HeroSection = () => {
       language,
       gender: groups.map((g) => g.gender),
       type: groups.map((g) => g.type),
+      clothing_tags_count,
     });
 
     try {
-      const res = await createDocument({
+      const res = await uploadProductToAi({
         images,
         backpartImages,
+        clothingTags,
         bodyData,
       }).unwrap();
-      const { document, generatedImageIds } = normalizeDocumentApiData(
-        res.data,
+
+      const productId = String(res.data?.productId ?? "").trim();
+      if (!productId) {
+        toast.error("Upload succeeded but no product id was returned.");
+        return;
+      }
+
+      saveActiveProductId(productId);
+      toast.success(res.message || "Upload started — waiting for AI…");
+      router.push(
+        `/analyzing?productId=${encodeURIComponent(productId)}&poll=${DEFAULT_POLL_SECONDS}`,
       );
-      saveGeneratedDocument(document, generatedImageIds, language);
-      markFabricFeaturePending(document.id);
-      sessionStorage.setItem("generatedDocumentId", document.id);
-      sessionStorage.removeItem("generationStartedAt");
-      toast.success(res.message || "Generation started");
     } catch (error) {
       toast.error(getRtkQueryErrorMessage(error));
-      router.push("/");
     }
   };
 
@@ -287,12 +314,20 @@ const HeroSection = () => {
                 canDelete={groups.length > 1}
                 onSelect={() => handleActiveGroupChange(index)}
                 onDelete={() => handleDeleteGroup(group.id, index)}
-                onSlotFile={(slot, file) => handleSlotFile(group.id, slot, file)}
+                onSlotFile={(slot, file) =>
+                  handleSlotFile(group.id, slot, file)
+                }
                 onSlotFiles={(slot, files) =>
                   handleSlotFiles(group.id, slot, files)
                 }
                 onClearSlot={(slot) => handleClearSlot(group.id, slot)}
                 onSwapSlots={() => handleSwapSlots(group.id)}
+                onAddClothingTags={(files) =>
+                  handleAddClothingTags(group.id, files)
+                }
+                onRemoveClothingTag={(tagIndex) =>
+                  handleRemoveClothingTag(group.id, tagIndex)
+                }
                 onGenderChange={(gender) =>
                   updateGroup(group.id, (g) => ({ ...g, gender }))
                 }

@@ -61,21 +61,30 @@ import {
 } from "@/lib/shopify-field-options";
 import { toast } from "sonner";
 import { getAccessToken } from "@/lib/auth-session";
-import { useUpdateDocumentMutation } from "@/lib/api/documentApi";
+import {
+  useLazyGetProductByIdQuery,
+  useUpdateDocumentMutation,
+} from "@/lib/api/documentApi";
 import { useGetModelPositionQuery } from "@/lib/api/modelPositionApi";
 import { getRtkQueryErrorMessage } from "@/lib/api/authApi";
 import { CompactProductEditor } from "@/components/features/product-listing/CompactProductEditor";
+import { stripAiAutoSizeFromPayload } from "@/lib/fabric-feature-pending";
 import {
-  stripAiAutoSizeFromPayload,
-  stripAiFabricFeatureFromPayload,
-} from "@/lib/fabric-feature-pending";
+  parseProductStatus,
+  resolveProductId,
+  saveActiveProductId,
+  wrapAiProductAsDocument,
+} from "@/lib/ai-product-helpers";
+import { readGenerationLanguage } from "@/lib/feature-catalog";
 import { cn } from "@/lib/utils";
+import { useRouter, useSearchParams } from "next/navigation";
 
 /** Normalize AI-generated payload for the result editor. */
 function prepareResultPayload(
   payload: StoredGeneratedPayload,
 ): StoredGeneratedPayload {
-  return stripAiAutoSizeFromPayload(stripAiFabricFeatureFromPayload(payload));
+  // Keep API Size / Fabric / Feature / Brand. Only clear dimension size guesses.
+  return stripAiAutoSizeFromPayload(payload);
 }
 
 /** Shown when nothing is stored in localStorage yet. */
@@ -159,6 +168,8 @@ const FALLBACK_PRODUCT_DATA: ProductListingData = {
 const AiResultContent: React.FC = () => {
   const [localPayload, setLocalPayload] =
     useState<StoredGeneratedPayload | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [isLoadingProduct, setIsLoadingProduct] = useState(true);
   const [activeTab, setActiveTab] = useState(0);
   const [skuByTab, setSkuByTab] = useState<Record<number, string>>({});
   const [priceByTab, setPriceByTab] = useState<Record<number, string>>({});
@@ -178,26 +189,117 @@ const AiResultContent: React.FC = () => {
     Record<number, StoredGeneratedPayload | null>
   >({});
 
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [fetchProduct] = useLazyGetProductByIdQuery();
   const [updateDocument, { isLoading: isUpdatingDocument }] =
     useUpdateDocumentMutation();
   const { data: modelPositionRes } = useGetModelPositionQuery();
   const modelPositions = modelPositionRes?.data?.position ?? null;
 
-  useEffect(() => {
-    const loaded = loadGeneratedDocument();
-    const prepared = loaded ? prepareResultPayload(loaded) : null;
+  const applyLoadedPayload = useCallback((prepared: StoredGeneratedPayload) => {
     setLocalPayload(prepared);
-    if (prepared?.document) {
+    setLoadError(null);
+    if (prepared.document) {
       const { skuByTab: s, priceByTab: p } = skuPriceMapsFromDocument(
         prepared.document,
       );
       setSkuByTab(s);
       setPriceByTab(p);
-      // Restore per-tab Shopify badges after reload
       const saved = loadShopifyStatusByDocument(prepared.document.id);
       setShopifyByTab(saved);
+      saveActiveProductId(prepared.document.id);
     }
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const run = async () => {
+      setIsLoadingProduct(true);
+      const urlId = searchParams.get("productId");
+      const productId = resolveProductId(urlId);
+
+      // Sync URL when only localStorage has the id
+      if (productId && !urlId?.trim()) {
+        const params = new URLSearchParams(searchParams.toString());
+        params.set("productId", productId);
+        router.replace(`/ai-result?${params.toString()}`);
+      }
+
+      if (!productId) {
+        const loaded = loadGeneratedDocument();
+        if (!cancelled) {
+          if (loaded) {
+            applyLoadedPayload(prepareResultPayload(loaded));
+          } else {
+            setLocalPayload(null);
+            setLoadError("No product id in URL or local storage.");
+          }
+          setIsLoadingProduct(false);
+        }
+        return;
+      }
+
+      // Prefer fresh API; fall back to matching localStorage while loading fails
+      const cached = loadGeneratedDocument();
+      if (
+        cached?.document?.id === productId &&
+        !cancelled
+      ) {
+        applyLoadedPayload(prepareResultPayload(cached));
+      }
+
+      try {
+        const res = await fetchProduct(productId).unwrap();
+        if (cancelled) return;
+        const phase = parseProductStatus(res.data?.status);
+        if (phase === "failed") {
+          setLoadError(
+            res.message || "This product generation failed.",
+          );
+          setIsLoadingProduct(false);
+          return;
+        }
+        if (phase !== "completed") {
+          // Not ready — send back to analyzing
+          router.replace(
+            `/analyzing?productId=${encodeURIComponent(productId)}`,
+          );
+          return;
+        }
+        const document = wrapAiProductAsDocument(res.data);
+        const lang = readGenerationLanguage();
+        const payload: StoredGeneratedPayload = {
+          savedAt: new Date().toISOString(),
+          document,
+          generatedImageIds:
+            cached?.document?.id === productId
+              ? cached.generatedImageIds
+              : undefined,
+          outputLanguage: lang,
+        };
+        saveGeneratedDocument(
+          document,
+          payload.generatedImageIds,
+          lang,
+        );
+        applyLoadedPayload(prepareResultPayload(payload));
+      } catch (error) {
+        if (cancelled) return;
+        if (!(cached?.document?.id === productId)) {
+          setLoadError(getRtkQueryErrorMessage(error));
+        }
+      } finally {
+        if (!cancelled) setIsLoadingProduct(false);
+      }
+    };
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [applyLoadedPayload, fetchProduct, router, searchParams]);
 
   const applyBatchUpdate = useCallback(
     (tabIndex: number, updater: (batch: ImageBatchRow) => void) => {
@@ -664,6 +766,29 @@ const AiResultContent: React.FC = () => {
     setShopifyHistoryOpen(true);
   };
 
+  if (isLoadingProduct && !localPayload) {
+    return (
+      <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3 bg-slate-50 px-4">
+        <Loader2 className="h-8 w-8 animate-spin text-[#A825C7]" />
+        <p className="text-sm text-slate-600">Loading product result…</p>
+      </div>
+    );
+  }
+
+  if (loadError && !localPayload) {
+    return (
+      <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3 bg-slate-50 px-4 text-center">
+        <p className="text-base font-semibold text-slate-900">
+          Could not load result
+        </p>
+        <p className="max-w-md text-sm text-rose-600">{loadError}</p>
+        <Button type="button" onClick={() => router.push("/")}>
+          Go home
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-[100dvh] bg-slate-50">
       <div className="mx-auto flex max-w-[1400px] flex-col gap-3 px-3 py-3 sm:px-4 sm:py-4">
@@ -716,7 +841,7 @@ const AiResultContent: React.FC = () => {
           onSelectedImageChange={setSelectedImage}
           onImagesReorder={handleImageReorder}
           documentId={localPayload?.document?.id}
-          awaitFabricFeatureSelection
+          awaitFabricFeatureSelection={false}
           genderToolbar={
             <>
               <div

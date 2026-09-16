@@ -280,6 +280,20 @@ function pushImagesFromBatch(
     "image_diagram",
     "physical_dimensions",
   );
+
+  const clothingTags = batch.clothing_tag_urls as string[] | undefined;
+  clothingTags?.forEach((url, i) => {
+    if (isNonEmptyString(url)) {
+      images.push({
+        url,
+        label:
+          clothingTags.length > 1
+            ? `Clothing tag ${i + 1}`
+            : "Clothing tag",
+        sku: pickSku(skuMap, "clothing_tag", "clothing_tags"),
+      });
+    }
+  });
 }
 
 /** Pull `images_batch` rows from POST /documents `data.aiGenerated`.
@@ -420,15 +434,16 @@ export function mapBatchItemToProductListingData(
 
   const aiRoot = readAiRoot(doc ?? null);
 
-  // Size empty unless the user (or explicit variant_data.sizes) set it.
-  // Never use dimensions.selected_size / available_sizes (AI guesses).
+  // Size from AI `variant_data.sizes` (usually one value). Ignore dimensions.* guesses.
   const sizeList = Array.isArray(variant?.sizes)
     ? variant.sizes
         .map(String)
         .map((s) => s.trim())
         .filter((s) => s && s !== "—")
     : [];
-  const selectedSize = sizeList.length ? joinMultiValues(sizeList) : "—";
+  const selectedSize = sizeList.length
+    ? joinMultiValues(sizeList.slice(0, 1))
+    : "—";
 
   const colors = variant?.colors?.length
     ? variant.colors.map(String).filter((c) => c && c !== "—")

@@ -23,6 +23,9 @@ export type ImageGroup = {
   back: File | null;
   frontPreview: string | null;
   backPreview: string | null;
+  /** Optional clothing label / tag photos for this group */
+  clothingTags: File[];
+  clothingTagPreviews: string[];
   selectedOptions: string[];
   gender: GroupGender;
   type: GroupType;
@@ -38,10 +41,18 @@ export function createEmptyGroup(): ImageGroup {
     back: null,
     frontPreview: null,
     backPreview: null,
+    clothingTags: [],
+    clothingTagPreviews: [],
     selectedOptions: [...DEFAULT_GROUP_FEATURE_IDS],
     gender: DEFAULT_GROUP_GENDER,
     type: DEFAULT_GROUP_TYPE,
   };
+}
+
+export function revokeGroupTagPreviews(group: ImageGroup) {
+  for (const url of group.clothingTagPreviews) {
+    if (url) URL.revokeObjectURL(url);
+  }
 }
 
 export const IMAGE_ACCEPT = {

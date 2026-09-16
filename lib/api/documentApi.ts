@@ -36,13 +36,43 @@ export type SingleDocument = {
   updatedAt: string;
 };
 
+/** Flat product from GET /documents/product/:id */
+export type AiProductRecord = {
+  id: string;
+  seller_id?: string;
+  language?: string;
+  status?: string;
+  is_multi_image?: boolean;
+  images_batch?: unknown[];
+  created_at?: string;
+  updated_at?: string;
+  ready_to_publish?: boolean;
+  [key: string]: unknown;
+};
+
+/** POST /documents/upload-product-to-ai `data` */
+export type UploadProductToAiResponseData = {
+  id: string;
+  status?: string;
+  userId?: string;
+  productId: string;
+  product?: number;
+  generatedImages?: number;
+  totalSavedTimes?: number;
+  customFields?: AiProductRecord;
+  createdAt?: string;
+  updatedAt?: string;
+  [key: string]: unknown;
+};
+
 /** POST /documents `data` — nested shape from newer API. */
 export type CreateDocumentResponseData =
   | SingleDocument
   | {
       document: SingleDocument;
       generatedImageId: string[];
-    };
+    }
+  | UploadProductToAiResponseData;
 
 export const documentApi = createApi({
   reducerPath: "documentApi",
@@ -56,10 +86,16 @@ export const documentApi = createApi({
       return headers;
     },
   }),
-  tagTypes: ["Documents"],
+  tagTypes: ["Documents", "AiProduct"],
   endpoints: (builder) => ({
     getDocuments: builder.query<
-      { success: boolean; statusCode: number; message: string; data: DocumentListItem[]; meta: Meta },
+      {
+        success: boolean;
+        statusCode: number;
+        message: string;
+        data: DocumentListItem[];
+        meta: Meta;
+      },
       { page?: number; limit?: number; search?: string }
     >({
       query: (params) => ({ url: "/documents", method: "GET", params }),
@@ -69,10 +105,57 @@ export const documentApi = createApi({
       query: (id) => ({ url: `/documents/${id}`, method: "GET" }),
       providesTags: ["Documents"],
     }),
+
+    /**
+     * GET /documents/product/:id
+     * Poll until status is completed (or failed).
+     */
+    getProductById: builder.query<ApiEnvelope<AiProductRecord>, string>({
+      query: (id) => ({
+        url: `/documents/product/${id}`,
+        method: "GET",
+      }),
+      providesTags: (_r, _e, id) => [{ type: "AiProduct", id }],
+    }),
+
     deleteDocument: builder.mutation<ApiEnvelope<SingleDocument>, string>({
       query: (id) => ({ url: `/documents/${id}`, method: "DELETE" }),
       invalidatesTags: ["Documents"],
     }),
+
+    /**
+     * POST /documents/upload-product-to-ai
+     * form-data: images, backpart_images, clothing_tags, bodyData
+     */
+    uploadProductToAi: builder.mutation<
+      ApiEnvelope<UploadProductToAiResponseData>,
+      {
+        images: File[];
+        backpartImages: File[];
+        clothingTags: File[];
+        bodyData: string;
+      }
+    >({
+      query: ({ images, backpartImages, clothingTags, bodyData }) => {
+        const formData = new FormData();
+        images.forEach((image) => formData.append("images", image));
+        backpartImages.forEach((image) =>
+          formData.append("backpart_images", image),
+        );
+        clothingTags.forEach((image) =>
+          formData.append("clothing_tags", image),
+        );
+        formData.append("bodyData", bodyData);
+        return {
+          url: "/documents/upload-product-to-ai",
+          method: "POST",
+          body: formData,
+        };
+      },
+      invalidatesTags: ["Documents", "AiProduct"],
+    }),
+
+    /** @deprecated Prefer uploadProductToAi */
     createDocument: builder.mutation<
       ApiEnvelope<CreateDocumentResponseData>,
       { images: File[]; backpartImages: File[]; bodyData: string }
@@ -109,7 +192,10 @@ export const documentApi = createApi({
 export const {
   useGetDocumentsQuery,
   useLazyGetDocumentByIdQuery,
+  useGetProductByIdQuery,
+  useLazyGetProductByIdQuery,
   useDeleteDocumentMutation,
+  useUploadProductToAiMutation,
   useCreateDocumentMutation,
   useUpdateDocumentMutation,
 } = documentApi;

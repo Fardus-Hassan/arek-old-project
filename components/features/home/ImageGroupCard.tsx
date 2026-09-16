@@ -2,7 +2,7 @@
 
 import React, { useCallback } from "react";
 import { useDropzone } from "react-dropzone";
-import { Shirt, Trash2, Upload, X } from "lucide-react";
+import { Plus, Shirt, Trash2, Upload, X } from "lucide-react";
 import type {
   GroupGender,
   GroupSlot,
@@ -11,6 +11,7 @@ import type {
 } from "./image-group-types";
 import { IMAGE_ACCEPT } from "./image-group-types";
 import { GroupGenderTypeControls } from "./GroupGenderTypeControls";
+import { cn } from "@/lib/utils";
 
 type DragPayload = { groupId: string; slot: GroupSlot };
 
@@ -73,6 +74,8 @@ type ImageGroupCardProps = {
   onSlotFiles: (slot: GroupSlot, files: File[]) => void;
   onClearSlot: (slot: GroupSlot) => void;
   onSwapSlots: () => void;
+  onAddClothingTags: (files: File[]) => void;
+  onRemoveClothingTag: (tagIndex: number) => void;
   onGenderChange: (gender: GroupGender) => void;
   onTypeChange: (type: GroupType) => void;
 };
@@ -292,9 +295,30 @@ export function ImageGroupCard({
   onSlotFiles,
   onClearSlot,
   onSwapSlots,
+  onAddClothingTags,
+  onRemoveClothingTag,
   onGenderChange,
   onTypeChange,
 }: ImageGroupCardProps) {
+  const onTagDrop = useCallback(
+    (acceptedFiles: File[]) => {
+      if (acceptedFiles.length === 0) return;
+      onAddClothingTags(acceptedFiles);
+    },
+    [onAddClothingTags],
+  );
+
+  const {
+    getRootProps: getTagRootProps,
+    getInputProps: getTagInputProps,
+    isDragActive: isTagDragActive,
+  } = useDropzone({
+    onDrop: onTagDrop,
+    accept: IMAGE_ACCEPT,
+    multiple: true,
+    noClick: false,
+  });
+
   return (
     <div
       role="button"
@@ -365,6 +389,78 @@ export function ImageGroupCard({
           onClear={() => onClearSlot("back")}
           onSwap={onSwapSlots}
         />
+      </div>
+
+      <div
+        className="mt-4"
+        onClick={(e) => e.stopPropagation()}>
+        <div className="mb-2 flex items-baseline justify-between gap-2">
+          <p className="text-xs font-semibold text-slate-800">
+            Clothing tags
+            <span className="ml-1.5 font-normal text-slate-400">optional</span>
+          </p>
+          {group.clothingTags.length > 0 ? (
+            <span className="text-[11px] tabular-nums text-slate-400">
+              {group.clothingTags.length}
+            </span>
+          ) : null}
+        </div>
+
+        <div
+          {...getTagRootProps()}
+          className={cn(
+            "flex flex-wrap items-center gap-2 rounded-xl p-1 transition-colors",
+            isTagDragActive && "bg-[#F9F1FB] ring-2 ring-[#A825C7]/35",
+          )}>
+          <input {...getTagInputProps()} />
+
+          {group.clothingTagPreviews.map((url, tagIndex) => (
+            <div
+              key={`${url}-${tagIndex}`}
+              className="group/tag relative h-[4.5rem] w-[4.5rem] shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={url}
+                alt={`Tag ${tagIndex + 1}`}
+                className="h-full w-full object-cover"
+                onClick={(e) => e.stopPropagation()}
+              />
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRemoveClothingTag(tagIndex);
+                }}
+                className="absolute right-1 top-1 rounded-full bg-black/55 p-0.5 text-white opacity-90 transition hover:bg-black/75"
+                aria-label={`Remove tag ${tagIndex + 1}`}>
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          ))}
+
+          <button
+            type="button"
+            className={cn(
+              "flex h-[4.5rem] w-[4.5rem] shrink-0 flex-col items-center justify-center gap-1 rounded-xl border border-slate-200 bg-slate-50/80 text-slate-500 transition-colors",
+              "hover:border-[#A825C7]/50 hover:bg-[#F9F1FB] hover:text-[#A825C7]",
+              isTagDragActive && "border-[#A825C7] bg-[#F9F1FB] text-[#A825C7]",
+            )}
+            aria-label="Add clothing tag photos">
+            <Plus className="h-5 w-5" strokeWidth={2} />
+            <span className="text-[10px] font-semibold leading-none">Add</span>
+          </button>
+
+          {group.clothingTagPreviews.length === 0 && !isTagDragActive ? (
+            <p className="min-w-0 flex-1 pl-1 text-[11px] leading-snug text-slate-400 sm:text-xs">
+              Care / brand labels — click Add or drop photos here
+            </p>
+          ) : null}
+          {isTagDragActive ? (
+            <p className="min-w-0 flex-1 pl-1 text-[11px] font-medium text-[#A825C7] sm:text-xs">
+              Drop to add tags
+            </p>
+          ) : null}
+        </div>
       </div>
 
       {isActive && (

@@ -52,6 +52,7 @@ export function removeImageUrlFromBatchRow(
   filterUrlArray("virtual_tryon_urls");
   filterUrlArray("model_urls");
   filterUrlArray("mannequin_urls");
+  filterUrlArray("clothing_tag_urls");
 
   if (Array.isArray(batch.image_output_order)) {
     batch.image_output_order = (batch.image_output_order as unknown[])
