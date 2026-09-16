@@ -253,9 +253,9 @@ const HeroSection = () => {
         bodyData,
       }).unwrap();
 
-      const productId = String(res.data?.productId ?? "").trim();
+      const productId = String(res.data?.id ?? "").trim();
       if (!productId) {
-        toast.error("Upload succeeded but no product id was returned.");
+        toast.error("Upload succeeded but no id was returned.");
         return;
       }
 

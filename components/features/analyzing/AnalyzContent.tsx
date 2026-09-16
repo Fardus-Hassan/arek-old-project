@@ -84,11 +84,13 @@ export default function AnalyzContent() {
 
       if (phase === "completed") {
         finishingRef.current = true;
-        const document = wrapAiProductAsDocument(product);
+        const document = wrapAiProductAsDocument(product, {
+          idOverride: productId,
+        });
         const lang = readGenerationLanguage();
         persistGenerationLanguage(lang);
         saveGeneratedDocument(document, [], lang);
-        saveActiveProductId(product.id);
+        saveActiveProductId(productId);
 
         setCurrentStep(2);
         setProgress(50);

@@ -52,10 +52,12 @@ export type AiProductRecord = {
 
 /** POST /documents/upload-product-to-ai `data` */
 export type UploadProductToAiResponseData = {
+  /** Job / upload id — use this for GET /documents/product/:id */
   id: string;
   status?: string;
   userId?: string;
-  productId: string;
+  /** Related product uuid (not used for poll path) */
+  productId?: string;
   product?: number;
   generatedImages?: number;
   totalSavedTimes?: number;

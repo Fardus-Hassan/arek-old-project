@@ -53,11 +53,15 @@ export function parseProductStatus(status: unknown): ProductPollPhase {
 /**
  * Wrap flat GET /documents/product/:id payload into SingleDocument so
  * existing extractImagesBatchFromDocument / ai-result mapping still works.
+ *
+ * `idOverride` — use the upload/job id we poll with when GET body's `id`
+ * differs (POST returns `id` for GET path; GET body may expose another id).
  */
 export function wrapAiProductAsDocument(
   product: AiProductRecord,
+  options?: { idOverride?: string },
 ): SingleDocument {
-  const id = String(product.id ?? "").trim();
+  const id = String(options?.idOverride ?? product.id ?? "").trim();
   const seller = String(product.seller_id ?? "").trim();
   const created = String(product.created_at ?? new Date().toISOString());
   const updated = String(product.updated_at ?? created);
@@ -70,10 +74,10 @@ export function wrapAiProductAsDocument(
     updatedAt: updated,
     aiGenerated: {
       status: product.status ?? "processing",
-      product_id: id,
+      product_id: String(product.id ?? id),
       product: {
         ...product,
-        id,
+        id: String(product.id ?? id),
         ready_to_publish: Boolean(product.ready_to_publish),
       },
     },

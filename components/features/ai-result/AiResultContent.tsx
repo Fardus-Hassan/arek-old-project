@@ -268,7 +268,9 @@ const AiResultContent: React.FC = () => {
           );
           return;
         }
-        const document = wrapAiProductAsDocument(res.data);
+        const document = wrapAiProductAsDocument(res.data, {
+          idOverride: productId,
+        });
         const lang = readGenerationLanguage();
         const payload: StoredGeneratedPayload = {
           savedAt: new Date().toISOString(),
