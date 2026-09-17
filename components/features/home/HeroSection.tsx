@@ -12,6 +12,7 @@ import {
   DEFAULT_POLL_SECONDS,
   saveActiveProductId,
 } from "@/lib/ai-product-helpers";
+import { unlockNotificationSound } from "@/lib/notification-sound";
 import { mapGarmentOptionToApi } from "@/lib/garment-feature-map";
 import {
   DEFAULT_GROUP_FEATURE_IDS,
@@ -227,6 +228,7 @@ const HeroSection = () => {
 
     clearGeneratedDocument();
     persistGenerationLanguage(language);
+    unlockNotificationSound();
 
     const images = groups.map((g) => g.front!);
     const backpartImages = groups.map((g) => g.back!);

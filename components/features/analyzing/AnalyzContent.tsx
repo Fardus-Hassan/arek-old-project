@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PetalLoader from "@/components/ui/PetalLoader";
 import { useRouter, useSearchParams } from "next/navigation";
-import { playNotificationSound } from "@/lib/notification-sound";
+import { playNotificationSound, unlockNotificationSound } from "@/lib/notification-sound";
 import { useLazyGetProductByIdQuery } from "@/lib/api/documentApi";
 import {
   clampPollSeconds,
@@ -42,6 +42,17 @@ export default function AnalyzContent() {
     () => clampPollSeconds(searchParams.get("poll") ?? DEFAULT_POLL_SECONDS),
     [searchParams],
   );
+
+  useEffect(() => {
+    unlockNotificationSound();
+    const unlock = () => unlockNotificationSound();
+    window.addEventListener("pointerdown", unlock, { once: true });
+    window.addEventListener("keydown", unlock, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, []);
 
   useEffect(() => {
     if (!productId) return;
