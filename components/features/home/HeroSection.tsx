@@ -233,7 +233,7 @@ const HeroSection = () => {
     const images = groups.map((g) => g.front!);
     const backpartImages = groups.map((g) => g.back!);
     const clothingTags = groups.flatMap((g) => g.clothingTags);
-    const clothing_tags_count = groups.map((g) => g.clothingTags.length);
+    const hasClothingTags = clothingTags.length > 0;
     const bodyData = JSON.stringify({
       features: groups.map((g) => ({
         features:
@@ -244,14 +244,17 @@ const HeroSection = () => {
       language,
       gender: groups.map((g) => g.gender),
       type: groups.map((g) => g.type),
-      clothing_tags_count,
+      // Only send when ≥1 tag exists — empty count makes backend forEach crash
+      ...(hasClothingTags
+        ? { clothing_tags_count: groups.map((g) => g.clothingTags.length) }
+        : {}),
     });
 
     try {
       const res = await uploadProductToAi({
         images,
         backpartImages,
-        clothingTags,
+        clothingTags: hasClothingTags ? clothingTags : [],
         bodyData,
       }).unwrap();
 

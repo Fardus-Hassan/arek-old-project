@@ -144,9 +144,12 @@ export const documentApi = createApi({
         backpartImages.forEach((image) =>
           formData.append("backpart_images", image),
         );
-        clothingTags.forEach((image) =>
-          formData.append("clothing_tags", image),
-        );
+        // Omit field entirely when empty — backend forEach crashes on undefined
+        if (clothingTags.length > 0) {
+          clothingTags.forEach((image) =>
+            formData.append("clothing_tags", image),
+          );
+        }
         formData.append("bodyData", bodyData);
         return {
           url: "/documents/upload-product-to-ai",
