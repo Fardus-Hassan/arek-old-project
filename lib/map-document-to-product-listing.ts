@@ -296,16 +296,24 @@ function pushImagesFromBatch(
   });
 }
 
-/** Pull `images_batch` rows from POST /documents `data.aiGenerated`.
+/** Pull `images_batch` rows from document `aiGenerated`.
+ * Supports both shapes:
+ * - `aiGenerated.product.images_batch` (older)
+ * - `aiGenerated.images_batch` (current upload-product-to-ai / GET product)
  * Sorted by 0-based `image_index` so tab order matches generatedImageId[i]. */
 export function extractImagesBatchFromDocument(
   doc: SingleDocument,
 ): Record<string, unknown>[] {
   const ai = doc.aiGenerated as
-    | { product?: { images_batch?: unknown[] } }
+    | {
+        images_batch?: unknown[];
+        product?: { images_batch?: unknown[] };
+      }
     | null
     | undefined;
-  const batch = ai?.product?.images_batch;
+  const batch = Array.isArray(ai?.images_batch)
+    ? ai.images_batch
+    : ai?.product?.images_batch;
   if (!Array.isArray(batch)) return [];
   const rows = batch.map((row) => row as Record<string, unknown>);
 
@@ -441,9 +449,7 @@ export function mapBatchItemToProductListingData(
         .map((s) => s.trim())
         .filter((s) => s && s !== "—")
     : [];
-  const selectedSize = sizeList.length
-    ? joinMultiValues(sizeList.slice(0, 1))
-    : "—";
+  const selectedSize = sizeList.length ? joinMultiValues(sizeList) : "—";
 
   const colors = variant?.colors?.length
     ? variant.colors.map(String).filter((c) => c && c !== "—")

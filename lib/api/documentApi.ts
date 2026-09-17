@@ -112,7 +112,7 @@ export const documentApi = createApi({
      * GET /documents/product/:id
      * Poll until status is completed (or failed).
      */
-    getProductById: builder.query<ApiEnvelope<AiProductRecord>, string>({
+    getProductById: builder.query<ApiEnvelope<unknown>, string>({
       query: (id) => ({
         url: `/documents/product/${id}`,
         method: "GET",

@@ -24,7 +24,21 @@ export function clampPollSeconds(raw: unknown): number {
   );
 }
 
-export type ProductPollPhase = "processing" | "completed" | "failed";
+export type ProductPollPhase = "processing" | "completed" | "failed" | "expired";
+
+export type ProductPollKind = "document" | "flat" | "job" | "unknown";
+
+export type NormalizedProductPoll = {
+  kind: ProductPollKind;
+  phase: ProductPollPhase;
+  imagesBatch: Record<string, unknown>[];
+  generatedImageIds: string[];
+  /** Ready SingleDocument when kind === "document" */
+  document: SingleDocument | null;
+  completedCount: number;
+  totalCount: number;
+  message?: string;
+};
 
 export function parseProductStatus(status: unknown): ProductPollPhase {
   const s = String(status ?? "")
@@ -48,6 +62,131 @@ export function parseProductStatus(status: unknown): ProductPollPhase {
     return "failed";
   }
   return "processing";
+}
+
+function asRecord(v: unknown): Record<string, unknown> | null {
+  return v && typeof v === "object" ? (v as Record<string, unknown>) : null;
+}
+
+function readImagesBatch(from: unknown): Record<string, unknown>[] {
+  const obj = asRecord(from);
+  const batch = obj?.images_batch;
+  if (!Array.isArray(batch)) return [];
+  return batch.filter((row) => row && typeof row === "object") as Record<
+    string,
+    unknown
+  >[];
+}
+
+/** A batch row counts as generated when status is completed or listing fields exist. */
+export function isBatchRowGenerated(row: Record<string, unknown>): boolean {
+  const status = String(row.status ?? "")
+    .trim()
+    .toLowerCase();
+  if (
+    status === "completed" ||
+    status === "complete" ||
+    status === "success"
+  ) {
+    return true;
+  }
+  if (row.product_title != null && String(row.product_title).trim()) return true;
+  const listing = asRecord(row.listing);
+  if (listing?.title != null && String(listing.title).trim()) return true;
+  if (row.description != null && String(row.description).trim()) return true;
+  return false;
+}
+
+export function countGeneratedBatchRows(
+  rows: Record<string, unknown>[],
+): { completed: number; total: number } {
+  const total = rows.length;
+  const completed = rows.filter(isBatchRowGenerated).length;
+  return { completed, total };
+}
+
+/**
+ * Normalize GET /documents/product/:id `data` into one of:
+ * - document (+ generatedImageId) → real full result
+ * - flat product → processing / partial
+ * - job wrapper → late hit after complete (no usable listing)
+ */
+export function normalizeProductPollData(
+  data: unknown,
+): NormalizedProductPoll {
+  const root = asRecord(data);
+  if (!root) {
+    return {
+      kind: "unknown",
+      phase: "processing",
+      imagesBatch: [],
+      generatedImageIds: [],
+      document: null,
+      completedCount: 0,
+      totalCount: 0,
+    };
+  }
+
+  const nestedDoc = asRecord(root.document);
+  const nestedAi = nestedDoc ? asRecord(nestedDoc.aiGenerated) : null;
+  const rawIds = root.generatedImageId;
+  const generatedImageIds = Array.isArray(rawIds)
+    ? rawIds.filter((x): x is string => typeof x === "string" && Boolean(x.trim()))
+    : [];
+
+  // Shape 1: { document, generatedImageId }
+  if (nestedDoc?.id && nestedAi) {
+    const imagesBatch = readImagesBatch(nestedAi);
+    const { completed, total } = countGeneratedBatchRows(imagesBatch);
+    const doc = nestedDoc as unknown as SingleDocument;
+    return {
+      kind: "document",
+      phase: "completed",
+      imagesBatch,
+      generatedImageIds,
+      document: doc,
+      completedCount: completed || total,
+      totalCount: total,
+    };
+  }
+
+  // Shape 3: job wrapper { id, status, productId, customFields } — no usable listing
+  const customFields = asRecord(root.customFields);
+  const looksLikeJob =
+    Boolean(customFields) &&
+    root.productId != null &&
+    !Array.isArray(root.images_batch);
+  if (looksLikeJob) {
+    const imagesBatch = readImagesBatch(customFields);
+    const { completed, total } = countGeneratedBatchRows(imagesBatch);
+    const jobPhase = parseProductStatus(root.status);
+    return {
+      kind: "job",
+      phase: jobPhase === "failed" ? "failed" : "expired",
+      imagesBatch,
+      generatedImageIds: [],
+      document: null,
+      completedCount: completed,
+      totalCount: total,
+      message:
+        "Result is no longer available from this link. Please generate again.",
+    };
+  }
+
+  // Shape 2: flat product
+  const imagesBatch = readImagesBatch(root);
+  const { completed, total } = countGeneratedBatchRows(imagesBatch);
+  const flatPhase = parseProductStatus(root.status);
+
+  return {
+    kind: "flat",
+    phase: flatPhase === "failed" ? "failed" : "processing",
+    imagesBatch,
+    generatedImageIds: [],
+    document: null,
+    completedCount: completed,
+    totalCount: total,
+  };
 }
 
 /**

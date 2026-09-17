@@ -4,16 +4,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PetalLoader from "@/components/ui/PetalLoader";
 import { useRouter, useSearchParams } from "next/navigation";
 import { playNotificationSound } from "@/lib/notification-sound";
-import {
-  useLazyGetProductByIdQuery,
-} from "@/lib/api/documentApi";
+import { useLazyGetProductByIdQuery } from "@/lib/api/documentApi";
 import {
   clampPollSeconds,
   DEFAULT_POLL_SECONDS,
-  parseProductStatus,
+  normalizeProductPollData,
   resolveProductId,
   saveActiveProductId,
-  wrapAiProductAsDocument,
 } from "@/lib/ai-product-helpers";
 import {
   persistGenerationLanguage,
@@ -28,6 +25,8 @@ export default function AnalyzContent() {
   const [progress, setProgress] = useState(25);
   const [failMessage, setFailMessage] = useState<string | null>(null);
   const [lastCheckedAt, setLastCheckedAt] = useState<string | null>(null);
+  const [completedCount, setCompletedCount] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
   const router = useRouter();
   const searchParams = useSearchParams();
   const [fetchProduct] = useLazyGetProductByIdQuery();
@@ -44,7 +43,6 @@ export default function AnalyzContent() {
     [searchParams],
   );
 
-  // Keep productId in URL + storage when only one side has it
   useEffect(() => {
     if (!productId) return;
     saveActiveProductId(productId);
@@ -61,17 +59,46 @@ export default function AnalyzContent() {
     router.push(`/ai-result?productId=${encodeURIComponent(productId)}`);
   }, [productId, router]);
 
+  const finishWithDocument = useCallback(
+    (document: NonNullable<
+      ReturnType<typeof normalizeProductPollData>["document"]
+    >, generatedImageIds: string[]) => {
+      if (!productId || finishingRef.current) return;
+      finishingRef.current = true;
+      const lang = readGenerationLanguage();
+      persistGenerationLanguage(lang);
+      saveGeneratedDocument(document, generatedImageIds, lang);
+      saveActiveProductId(productId);
+
+      setCurrentStep(2);
+      setProgress(50);
+      window.setTimeout(() => {
+        setCurrentStep(3);
+        setProgress(75);
+      }, 700);
+      window.setTimeout(() => {
+        setCurrentStep(4);
+        setProgress(100);
+        playNotificationSound();
+      }, 1400);
+      window.setTimeout(() => {
+        goToResult();
+      }, 2000);
+    },
+    [goToResult, productId],
+  );
+
   const checkStatus = useCallback(async () => {
     if (!productId || finishingRef.current || inFlightRef.current) return;
     inFlightRef.current = true;
     try {
       const res = await fetchProduct(productId).unwrap();
       setLastCheckedAt(new Date().toISOString());
-      const product = res.data;
-      if (!product?.id) return;
+      const normalized = normalizeProductPollData(res.data);
+      setCompletedCount(normalized.completedCount);
+      setTotalCount(normalized.totalCount);
 
-      const phase = parseProductStatus(product.status);
-      if (phase === "failed") {
+      if (normalized.phase === "failed") {
         finishingRef.current = true;
         setFailMessage(
           res.message ||
@@ -82,44 +109,45 @@ export default function AnalyzContent() {
         return;
       }
 
-      if (phase === "completed") {
+      if (normalized.phase === "expired") {
         finishingRef.current = true;
-        const document = wrapAiProductAsDocument(product, {
-          idOverride: productId,
-        });
-        const lang = readGenerationLanguage();
-        persistGenerationLanguage(lang);
-        saveGeneratedDocument(document, [], lang);
-        saveActiveProductId(productId);
-
-        setCurrentStep(2);
-        setProgress(50);
-        window.setTimeout(() => {
-          setCurrentStep(3);
-          setProgress(75);
-        }, 700);
-        window.setTimeout(() => {
-          setCurrentStep(4);
-          setProgress(100);
-          playNotificationSound();
-        }, 1400);
-        window.setTimeout(() => {
-          goToResult();
-        }, 2000);
+        setFailMessage(
+          normalized.message ||
+            "Result is no longer available. Please generate again.",
+        );
         return;
       }
 
-      // still processing
+      // Real full result: document + generatedImageId
+      if (normalized.kind === "document" && normalized.document) {
+        if (normalized.totalCount > 0) {
+          setCompletedCount(normalized.totalCount);
+          setTotalCount(normalized.totalCount);
+        }
+        finishWithDocument(
+          normalized.document,
+          normalized.generatedImageIds,
+        );
+        return;
+      }
+
+      // still processing / partial
       setCurrentStep((s) => Math.max(s, 2));
-      setProgress((p) => Math.max(p, 50));
+      if (normalized.totalCount > 0) {
+        const pct = Math.round(
+          (normalized.completedCount / normalized.totalCount) * 70,
+        );
+        setProgress(Math.max(40, Math.min(85, 30 + pct)));
+      } else {
+        setProgress((p) => Math.max(p, 50));
+      }
     } catch (error) {
       setLastCheckedAt(new Date().toISOString());
-      // Keep polling on transient errors; only show soft message
       console.warn("[analyzing] poll error", getRtkQueryErrorMessage(error));
     } finally {
       inFlightRef.current = false;
     }
-  }, [fetchProduct, goToResult, productId]);
+  }, [fetchProduct, finishWithDocument, productId]);
 
   useEffect(() => {
     if (!productId || failMessage) return;
@@ -196,6 +224,21 @@ export default function AnalyzContent() {
             <span className="font-semibold text-slate-800">{pollSeconds}s</span>{" "}
             whether your result is ready.
           </p>
+          {totalCount > 0 ? (
+            <p className="mt-4 text-lg font-semibold text-slate-900">
+              Generated{" "}
+              <span className="text-[#A825C7]">{completedCount}</span>
+              <span className="text-slate-400"> / </span>
+              {totalCount}
+              <span className="ml-1 text-sm font-medium text-slate-500">
+                group{totalCount === 1 ? "" : "s"}
+              </span>
+            </p>
+          ) : (
+            <p className="mt-4 text-sm font-medium text-slate-500">
+              Waiting for first group…
+            </p>
+          )}
         </div>
 
         <div className="bg-white border border-[#D1D1D1] rounded-2xl w-full p-6 sm:p-12 shadow-sm">

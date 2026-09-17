@@ -187,13 +187,12 @@ export function ProductListingPanel({
   };
 
   const onSizeChange = (vals: string[]) => {
-    const next = vals.slice(-1);
     applyBatchUpdate((b) => {
       const d = ensureNestedObject(b, "dimensions");
-      d.selected_size = joinMultiValues(next);
-      d.available_sizes = next;
+      d.selected_size = joinMultiValues(vals);
+      d.available_sizes = vals;
       const vd = ensureNestedObject(b, "variant_data");
-      vd.sizes = next;
+      vd.sizes = vals;
     });
   };
 
@@ -385,9 +384,8 @@ export function ProductListingPanel({
                 <SearchableMultiSelect
                   className={skuPriceInputClass}
                   placeholder="Select size"
-                  selectionMode="single"
                   options={catalog.size}
-                  values={sizeValues(productData).slice(0, 1)}
+                  values={sizeValues(productData)}
                   onValuesChange={onSizeChange}
                 />
               ) : (
@@ -647,9 +645,8 @@ export function ProductListingPanel({
                   <SearchableMultiSelect
                     className={skuPriceInputClass}
                     placeholder="Select size"
-                    selectionMode="single"
                     options={catalog.size}
-                    values={sizeValues(productData).slice(0, 1)}
+                    values={sizeValues(productData)}
                     onValuesChange={onSizeChange}
                   />
                 </div>

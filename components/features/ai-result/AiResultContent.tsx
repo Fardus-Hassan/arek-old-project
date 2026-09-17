@@ -7,6 +7,7 @@ import {
   getGeneratedImageIdsForDocument,
   loadGeneratedDocument,
   saveGeneratedDocument,
+  GENERATED_DOCUMENT_STORAGE_KEY,
   type StoredGeneratedPayload,
 } from "@/lib/generated-document-storage";
 import {
@@ -62,7 +63,6 @@ import {
 import { toast } from "sonner";
 import { getAccessToken } from "@/lib/auth-session";
 import {
-  useLazyGetProductByIdQuery,
   useUpdateDocumentMutation,
 } from "@/lib/api/documentApi";
 import { useGetModelPositionQuery } from "@/lib/api/modelPositionApi";
@@ -70,12 +70,8 @@ import { getRtkQueryErrorMessage } from "@/lib/api/authApi";
 import { CompactProductEditor } from "@/components/features/product-listing/CompactProductEditor";
 import { stripAiAutoSizeFromPayload } from "@/lib/fabric-feature-pending";
 import {
-  parseProductStatus,
-  resolveProductId,
   saveActiveProductId,
-  wrapAiProductAsDocument,
 } from "@/lib/ai-product-helpers";
-import { readGenerationLanguage } from "@/lib/feature-catalog";
 import { cn } from "@/lib/utils";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -168,7 +164,6 @@ const FALLBACK_PRODUCT_DATA: ProductListingData = {
 const AiResultContent: React.FC = () => {
   const [localPayload, setLocalPayload] =
     useState<StoredGeneratedPayload | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [isLoadingProduct, setIsLoadingProduct] = useState(true);
   const [activeTab, setActiveTab] = useState(0);
   const [skuByTab, setSkuByTab] = useState<Record<number, string>>({});
@@ -191,7 +186,6 @@ const AiResultContent: React.FC = () => {
 
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [fetchProduct] = useLazyGetProductByIdQuery();
   const [updateDocument, { isLoading: isUpdatingDocument }] =
     useUpdateDocumentMutation();
   const { data: modelPositionRes } = useGetModelPositionQuery();
@@ -199,7 +193,6 @@ const AiResultContent: React.FC = () => {
 
   const applyLoadedPayload = useCallback((prepared: StoredGeneratedPayload) => {
     setLocalPayload(prepared);
-    setLoadError(null);
     if (prepared.document) {
       const { skuByTab: s, priceByTab: p } = skuPriceMapsFromDocument(
         prepared.document,
@@ -212,96 +205,45 @@ const AiResultContent: React.FC = () => {
     }
   }, []);
 
+  /** Always show latest localStorage payload (no product API on this page). */
+  const hydrateFromStorage = useCallback(() => {
+    const cached = loadGeneratedDocument();
+    if (!cached?.document?.id) {
+      setIsLoadingProduct(false);
+      return;
+    }
+    applyLoadedPayload(prepareResultPayload(cached));
+
+    const docId = cached.document.id;
+    const urlId = searchParams.get("productId")?.trim();
+    if (urlId !== docId) {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("productId", docId);
+      router.replace(`/ai-result?${params.toString()}`);
+    }
+    setIsLoadingProduct(false);
+  }, [applyLoadedPayload, router, searchParams]);
+
   useEffect(() => {
-    let cancelled = false;
+    hydrateFromStorage();
 
-    const run = async () => {
-      setIsLoadingProduct(true);
-      const urlId = searchParams.get("productId");
-      const productId = resolveProductId(urlId);
-
-      // Sync URL when only localStorage has the id
-      if (productId && !urlId?.trim()) {
-        const params = new URLSearchParams(searchParams.toString());
-        params.set("productId", productId);
-        router.replace(`/ai-result?${params.toString()}`);
-      }
-
-      if (!productId) {
-        const loaded = loadGeneratedDocument();
-        if (!cancelled) {
-          if (loaded) {
-            applyLoadedPayload(prepareResultPayload(loaded));
-          } else {
-            setLocalPayload(null);
-            setLoadError("No product id in URL or local storage.");
-          }
-          setIsLoadingProduct(false);
-        }
-        return;
-      }
-
-      // Prefer fresh API; fall back to matching localStorage while loading fails
-      const cached = loadGeneratedDocument();
-      if (
-        cached?.document?.id === productId &&
-        !cancelled
-      ) {
-        applyLoadedPayload(prepareResultPayload(cached));
-      }
-
-      try {
-        const res = await fetchProduct(productId).unwrap();
-        if (cancelled) return;
-        const phase = parseProductStatus(res.data?.status);
-        if (phase === "failed") {
-          setLoadError(
-            res.message || "This product generation failed.",
-          );
-          setIsLoadingProduct(false);
-          return;
-        }
-        if (phase !== "completed") {
-          // Not ready — send back to analyzing
-          router.replace(
-            `/analyzing?productId=${encodeURIComponent(productId)}`,
-          );
-          return;
-        }
-        const document = wrapAiProductAsDocument(res.data, {
-          idOverride: productId,
-        });
-        const lang = readGenerationLanguage();
-        const payload: StoredGeneratedPayload = {
-          savedAt: new Date().toISOString(),
-          document,
-          generatedImageIds:
-            cached?.document?.id === productId
-              ? cached.generatedImageIds
-              : undefined,
-          outputLanguage: lang,
-        };
-        saveGeneratedDocument(
-          document,
-          payload.generatedImageIds,
-          lang,
-        );
-        applyLoadedPayload(prepareResultPayload(payload));
-      } catch (error) {
-        if (cancelled) return;
-        if (!(cached?.document?.id === productId)) {
-          setLoadError(getRtkQueryErrorMessage(error));
-        }
-      } finally {
-        if (!cancelled) setIsLoadingProduct(false);
-      }
+    const onStorage = (e: StorageEvent) => {
+      if (e.key && e.key !== GENERATED_DOCUMENT_STORAGE_KEY) return;
+      hydrateFromStorage();
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") hydrateFromStorage();
     };
 
-    void run();
+    window.addEventListener("storage", onStorage);
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", hydrateFromStorage);
     return () => {
-      cancelled = true;
+      window.removeEventListener("storage", onStorage);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", hydrateFromStorage);
     };
-  }, [applyLoadedPayload, fetchProduct, router, searchParams]);
+  }, [hydrateFromStorage]);
 
   const applyBatchUpdate = useCallback(
     (tabIndex: number, updater: (batch: ImageBatchRow) => void) => {
@@ -773,20 +715,6 @@ const AiResultContent: React.FC = () => {
       <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3 bg-slate-50 px-4">
         <Loader2 className="h-8 w-8 animate-spin text-[#A825C7]" />
         <p className="text-sm text-slate-600">Loading product result…</p>
-      </div>
-    );
-  }
-
-  if (loadError && !localPayload) {
-    return (
-      <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3 bg-slate-50 px-4 text-center">
-        <p className="text-base font-semibold text-slate-900">
-          Could not load result
-        </p>
-        <p className="max-w-md text-sm text-rose-600">{loadError}</p>
-        <Button type="button" onClick={() => router.push("/")}>
-          Go home
-        </Button>
       </div>
     );
   }
