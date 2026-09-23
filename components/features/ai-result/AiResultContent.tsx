@@ -7,9 +7,11 @@ import {
   getGeneratedImageIdsForDocument,
   loadGeneratedDocument,
   saveGeneratedDocument,
-  GENERATED_DOCUMENT_STORAGE_KEY,
+  isGeneratedDocumentStorageKey,
+  BATCHES_CHANGED_EVENT,
   type StoredGeneratedPayload,
 } from "@/lib/generated-document-storage";
+import { isGenerationJobStorageKey } from "@/lib/generation-jobs-storage";
 import {
   buildImageDetailsPatchPayload,
   ensureShopifyExportFieldsOnPatch,
@@ -205,17 +207,18 @@ const AiResultContent: React.FC = () => {
     }
   }, []);
 
-  /** Always show latest localStorage payload (no product API on this page). */
+  /** Prefer URL productId so parallel tabs keep their own batch. */
   const hydrateFromStorage = useCallback(() => {
-    const cached = loadGeneratedDocument();
+    const urlId = searchParams.get("productId")?.trim() || "";
+    const cached = loadGeneratedDocument(urlId || null);
     if (!cached?.document?.id) {
+      setLocalPayload(null);
       setIsLoadingProduct(false);
       return;
     }
     applyLoadedPayload(prepareResultPayload(cached));
 
     const docId = cached.document.id;
-    const urlId = searchParams.get("productId")?.trim();
     if (urlId !== docId) {
       const params = new URLSearchParams(searchParams.toString());
       params.set("productId", docId);
@@ -228,7 +231,8 @@ const AiResultContent: React.FC = () => {
     hydrateFromStorage();
 
     const onStorage = (e: StorageEvent) => {
-      if (e.key && e.key !== GENERATED_DOCUMENT_STORAGE_KEY) return;
+      if (e.key && !isGenerationJobStorageKey(e.key) && !isGeneratedDocumentStorageKey(e.key))
+        return;
       hydrateFromStorage();
     };
     const onVisible = () => {
@@ -238,10 +242,12 @@ const AiResultContent: React.FC = () => {
     window.addEventListener("storage", onStorage);
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", hydrateFromStorage);
+    window.addEventListener(BATCHES_CHANGED_EVENT, hydrateFromStorage);
     return () => {
       window.removeEventListener("storage", onStorage);
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", hydrateFromStorage);
+      window.removeEventListener(BATCHES_CHANGED_EVENT, hydrateFromStorage);
     };
   }, [hydrateFromStorage]);
 
@@ -532,7 +538,7 @@ const AiResultContent: React.FC = () => {
   /** Rebuild CSV entries from localStorage (sync) after save/PATCH so ids match product. */
   const rebuildCsvEntriesFromStorage = useCallback(
     (selected: TabCsvEntry[]): TabCsvEntry[] => {
-      const stored = loadGeneratedDocument();
+      const stored = loadGeneratedDocument(localPayload?.document?.id);
       if (!stored?.document) return selected;
       const rows = extractImagesBatchFromDocument(stored.document);
       const ids =
@@ -573,7 +579,7 @@ const AiResultContent: React.FC = () => {
       }
       return fresh;
     },
-    [modelPositions, skuByTab, priceByTab],
+    [modelPositions, skuByTab, priceByTab, localPayload?.document?.id],
   );
 
   const handleSaveBeforeShopifyUpload = async (
@@ -715,6 +721,26 @@ const AiResultContent: React.FC = () => {
       <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3 bg-slate-50 px-4">
         <Loader2 className="h-8 w-8 animate-spin text-[#A825C7]" />
         <p className="text-sm text-slate-600">Loading product result…</p>
+      </div>
+    );
+  }
+
+  if (!hasStoredDocument) {
+    return (
+      <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3 bg-slate-50 px-4 text-center">
+        <p className="text-base font-semibold text-slate-800">
+          No saved result in this browser
+        </p>
+        <p className="max-w-md text-sm text-slate-600">
+          Open a batch from <span className="font-medium">Saved batches</span> in
+          the top bar, or start a new generation from Home.
+        </p>
+        <Button
+          type="button"
+          className="mt-1 bg-[#A825C7] hover:bg-[#9219b0]"
+          onClick={() => router.push("/")}>
+          Go to Home
+        </Button>
       </div>
     );
   }

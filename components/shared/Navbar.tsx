@@ -1,6 +1,7 @@
 "use client";
 
 import Logo from "./Logo";
+import { SavedBatchesNavButton } from "./SavedBatchesNavButton";
 import { MenuIcon } from "lucide-react";
 import {
   DropdownMenu,
@@ -71,62 +72,66 @@ export default function Navbar() {
             <Logo />
           </div>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                className="bg-[#EEEEEE] p-1.5 rounded-xl flex items-center gap-3 hover:bg-[#E5E5E5] transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-300"
-                aria-label="User menu">
-                <div className="rounded-full border-2 border-[#FAFAFA] overflow-hidden w-10 h-10">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    className="rounded-full object-cover object-center"
-                    src={profileImage}
-                    width={40}
-                    height={40}
-                    alt="user-profile"
-                    onError={(e) => {
-                      const img = e.currentTarget;
-                      if (img.src !== DEFAULT_PROFILE_AVATAR) {
-                        img.src = DEFAULT_PROFILE_AVATAR;
-                      }
-                    }}
-                  />
-                </div>
-                <MenuIcon className="h-5 w-5 text-gray-800" />
-              </button>
-            </DropdownMenuTrigger>
+          <div className="flex items-center gap-2 sm:gap-3">
+            {hasToken ? <SavedBatchesNavButton /> : null}
 
-            <DropdownMenuContent
-              className="w-56 mt-2"
-              align="end"
-              sideOffset={5}>
-              <DropdownMenuLabel className="font-semibold">
-                My Account
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className="bg-[#EEEEEE] p-1.5 rounded-xl flex items-center gap-3 hover:bg-[#E5E5E5] transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-300"
+                  aria-label="User menu">
+                  <div className="rounded-full border-2 border-[#FAFAFA] overflow-hidden w-10 h-10">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      className="rounded-full object-cover object-center"
+                      src={profileImage}
+                      width={40}
+                      height={40}
+                      alt="user-profile"
+                      onError={(e) => {
+                        const img = e.currentTarget;
+                        if (img.src !== DEFAULT_PROFILE_AVATAR) {
+                          img.src = DEFAULT_PROFILE_AVATAR;
+                        }
+                      }}
+                    />
+                  </div>
+                  <MenuIcon className="h-5 w-5 text-gray-800" />
+                </button>
+              </DropdownMenuTrigger>
 
-              <DropdownMenuGroup>
-                {navLinks.map((link, i) => (
-                  <DropdownMenuItem key={i} asChild>
-                    <Link href={link.href} className="cursor-pointer">
-                      {link.label}
-                    </Link>
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuGroup>
+              <DropdownMenuContent
+                className="w-56 mt-2"
+                align="end"
+                sideOffset={5}>
+                <DropdownMenuLabel className="font-semibold">
+                  My Account
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
 
-              <DropdownMenuSeparator />
+                <DropdownMenuGroup>
+                  {navLinks.map((link, i) => (
+                    <DropdownMenuItem key={i} asChild>
+                      <Link href={link.href} className="cursor-pointer">
+                        {link.label}
+                      </Link>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuGroup>
 
-              <DropdownMenuItem
-                className="text-purple-500 focus:text-purple-600 focus:bg-red-50 cursor-pointer"
-                onSelect={(e) => {
-                  e.preventDefault();
-                  handleLogout();
-                }}>
-                Logout
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+                <DropdownMenuSeparator />
+
+                <DropdownMenuItem
+                  className="text-purple-500 focus:text-purple-600 focus:bg-red-50 cursor-pointer"
+                  onSelect={(e) => {
+                    e.preventDefault();
+                    handleLogout();
+                  }}>
+                  Logout
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
       </div>
     </header>

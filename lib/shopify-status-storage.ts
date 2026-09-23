@@ -54,3 +54,12 @@ export function upsertShopifyStatusTabs(
   saveShopifyStatusByDocument(documentId, next);
   return next;
 }
+
+export function clearShopifyStatusByDocument(documentId: string): void {
+  if (typeof window === "undefined" || !documentId) return;
+  try {
+    localStorage.removeItem(storageKey(documentId));
+  } catch {
+    // ignore
+  }
+}

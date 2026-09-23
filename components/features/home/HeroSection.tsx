@@ -7,11 +7,11 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useUploadProductToAiMutation } from "@/lib/api/documentApi";
 import { getRtkQueryErrorMessage } from "@/lib/api/authApi";
-import { clearGeneratedDocument } from "@/lib/generated-document-storage";
 import {
   DEFAULT_POLL_SECONDS,
   saveActiveProductId,
 } from "@/lib/ai-product-helpers";
+import { registerGenerationJob } from "@/lib/generation-jobs-storage";
 import { unlockNotificationSound } from "@/lib/notification-sound";
 import { mapGarmentOptionToApi } from "@/lib/garment-feature-map";
 import {
@@ -226,7 +226,6 @@ const HeroSection = () => {
       return;
     }
 
-    clearGeneratedDocument();
     persistGenerationLanguage(language);
     unlockNotificationSound();
 
@@ -265,6 +264,12 @@ const HeroSection = () => {
       }
 
       saveActiveProductId(productId);
+      registerGenerationJob({
+        id: productId,
+        groupCount: groups.length,
+        language,
+        pollSeconds: DEFAULT_POLL_SECONDS,
+      });
       toast.success(res.message || "Upload started — waiting for AI…");
       router.push(
         `/analyzing?productId=${encodeURIComponent(productId)}&poll=${DEFAULT_POLL_SECONDS}`,

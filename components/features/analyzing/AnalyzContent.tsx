@@ -17,6 +17,11 @@ import {
   readGenerationLanguage,
 } from "@/lib/feature-catalog";
 import { saveGeneratedDocument } from "@/lib/generated-document-storage";
+import {
+  markGenerationJobCompleted,
+  registerGenerationJob,
+  updateGenerationJobProgress,
+} from "@/lib/generation-jobs-storage";
 import { getRtkQueryErrorMessage } from "@/lib/api/authApi";
 import { Button } from "@/components/ui/button";
 
@@ -57,6 +62,11 @@ export default function AnalyzContent() {
   useEffect(() => {
     if (!productId) return;
     saveActiveProductId(productId);
+    registerGenerationJob({
+      id: productId,
+      groupCount: 1,
+      pollSeconds,
+    });
     const urlId = searchParams.get("productId")?.trim();
     if (urlId === productId) return;
     const params = new URLSearchParams(searchParams.toString());
@@ -80,6 +90,9 @@ export default function AnalyzContent() {
       persistGenerationLanguage(lang);
       saveGeneratedDocument(document, generatedImageIds, lang);
       saveActiveProductId(productId);
+      markGenerationJobCompleted(productId, {
+        totalCount: generatedImageIds.length || undefined,
+      });
 
       setCurrentStep(2);
       setProgress(50);
@@ -108,6 +121,11 @@ export default function AnalyzContent() {
       const normalized = normalizeProductPollData(res.data);
       setCompletedCount(normalized.completedCount);
       setTotalCount(normalized.totalCount);
+      updateGenerationJobProgress(productId, {
+        completedCount: normalized.completedCount,
+        totalCount: normalized.totalCount || undefined,
+        status: normalized.phase,
+      });
 
       if (normalized.phase === "failed") {
         finishingRef.current = true;
