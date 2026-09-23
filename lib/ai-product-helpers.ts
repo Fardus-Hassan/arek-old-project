@@ -223,6 +223,40 @@ export function wrapAiProductAsDocument(
   };
 }
 
+/**
+ * Keep localStorage / Saved batches keyed by the poll/upload `productId`.
+ * API complete payloads may expose a different `document.id` — preserve that
+ * as `aiGenerated.product_id` but force the outer id to the poll id.
+ */
+export function bindDocumentToPollId(
+  document: SingleDocument,
+  pollProductId: string,
+): SingleDocument {
+  const pollId = pollProductId.trim();
+  if (!pollId || !document) return document;
+  if (document.id === pollId) return document;
+
+  const prevAi =
+    document.aiGenerated && typeof document.aiGenerated === "object"
+      ? ({ ...(document.aiGenerated as Record<string, unknown>) } as Record<
+          string,
+          unknown
+        >)
+      : ({} as Record<string, unknown>);
+
+  const existingProductId = String(prevAi.product_id ?? "").trim();
+  const apiDocId = String(document.id ?? "").trim();
+
+  return {
+    ...document,
+    id: pollId,
+    aiGenerated: {
+      ...prevAi,
+      product_id: existingProductId || apiDocId || pollId,
+    },
+  };
+}
+
 export function saveActiveProductId(productId: string): void {
   if (typeof window === "undefined") return;
   const id = productId.trim();

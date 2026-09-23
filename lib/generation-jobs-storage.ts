@@ -1,5 +1,8 @@
 import type { OutputLanguage } from "@/lib/feature-catalog";
-import type { ProductPollPhase } from "@/lib/ai-product-helpers";
+import {
+  bindDocumentToPollId,
+  type ProductPollPhase,
+} from "@/lib/ai-product-helpers";
 import {
   BATCHES_CHANGED_EVENT,
   deleteSavedBatch,
@@ -355,18 +358,20 @@ export function applyPollSnapshotToJob(
     });
   }
 
-  if (
-    snapshot.phase === "completed" &&
-    snapshot.document?.id
-  ) {
+  if (snapshot.phase === "completed" && snapshot.document) {
+    const apiDocId = String(snapshot.document.id ?? "").trim();
+    const bound = bindDocumentToPollId(snapshot.document, id);
     saveGeneratedDocument(
-      snapshot.document,
+      bound,
       snapshot.generatedImageIds,
       snapshot.outputLanguage,
     );
-    const title = titleFromPayload(
-      loadGeneratedDocument(snapshot.document.id),
-    );
+    if (apiDocId && apiDocId !== id) {
+      deleteSavedBatch(apiDocId);
+      removeJob(apiDocId);
+      writeJobsIndex(readJobsIndex().filter((x) => x !== apiDocId));
+    }
+    const title = titleFromPayload(loadGeneratedDocument(id));
     markGenerationJobCompleted(id, {
       title,
       totalCount:

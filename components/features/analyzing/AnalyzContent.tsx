@@ -8,6 +8,7 @@ import { useLazyGetProductByIdQuery } from "@/lib/api/documentApi";
 import {
   clampPollSeconds,
   DEFAULT_POLL_SECONDS,
+  bindDocumentToPollId,
   normalizeProductPollData,
   resolveProductId,
   saveActiveProductId,
@@ -16,8 +17,12 @@ import {
   persistGenerationLanguage,
   readGenerationLanguage,
 } from "@/lib/feature-catalog";
-import { saveGeneratedDocument } from "@/lib/generated-document-storage";
 import {
+  deleteSavedBatch,
+  saveGeneratedDocument,
+} from "@/lib/generated-document-storage";
+import {
+  deleteGenerationJob,
   markGenerationJobCompleted,
   registerGenerationJob,
   updateGenerationJobProgress,
@@ -88,7 +93,16 @@ export default function AnalyzContent() {
       finishingRef.current = true;
       const lang = readGenerationLanguage();
       persistGenerationLanguage(lang);
-      saveGeneratedDocument(document, generatedImageIds, lang);
+
+      const apiDocId = String(document.id ?? "").trim();
+      const bound = bindDocumentToPollId(document, productId);
+      saveGeneratedDocument(bound, generatedImageIds, lang);
+      // Drop orphan local copy if API used a different document.id
+      if (apiDocId && apiDocId !== productId) {
+        deleteSavedBatch(apiDocId);
+        deleteGenerationJob(apiDocId);
+      }
+
       saveActiveProductId(productId);
       markGenerationJobCompleted(productId, {
         totalCount: generatedImageIds.length || undefined,
