@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Plus } from "lucide-react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
@@ -22,8 +22,19 @@ import { persistGenerationLanguage } from "@/lib/feature-catalog";
 import { ImageGroupCard } from "./ImageGroupCard";
 import { BulkUploadSection } from "./BulkUploadSection";
 import { StickyFeatureBar } from "./StickyFeatureBar";
+import { useGetMeQuery } from "@/lib/api/userApi";
+import { getAccessToken } from "@/lib/auth-session";
+import { useIsClient } from "@/lib/hooks";
+import {
+  canSelectAnyFeature,
+  grantedFeatureIds,
+  toGroupGender,
+  toGroupType,
+} from "@/lib/user-permissions";
 import {
   createEmptyGroup,
+  getGroupDefaults,
+  setGroupDefaults,
   revokeGroupTagPreviews,
   type GroupGender,
   type GroupSlot,
@@ -48,6 +59,7 @@ const HeroSection = () => {
   const [language, setLanguage] = useState<"English" | "Polish">(
     DEFAULT_OUTPUT_LANGUAGE,
   );
+  const [mode, setMode] = useState<"slow" | "fast">("slow");
   const router = useRouter();
   const [uploadProductToAi, { isLoading: isGenerating }] =
     useUploadProductToAiMutation();
@@ -55,6 +67,48 @@ const HeroSection = () => {
   const groupsRef = useRef(groups);
   groupsRef.current = groups;
   const groupCardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  const isClient = useIsClient();
+  const hasToken = isClient && !!getAccessToken();
+  const { data: meData } = useGetMeQuery(undefined, { skip: !hasToken });
+  const me = meData?.data ?? null;
+  const canSelectAll = canSelectAnyFeature(me);
+  const granted = useMemo(() => grantedFeatureIds(me), [me]);
+  /** Locked USER: only granted features are selectable. */
+  const allowedFeatureIds = canSelectAll ? undefined : granted;
+
+  useEffect(() => {
+    if (!me) return;
+    const defaults = {
+      selectedOptions:
+        granted.length > 0
+          ? granted
+          : canSelectAll
+            ? [...DEFAULT_GROUP_FEATURE_IDS]
+            : [],
+      gender: toGroupGender(me.gender) ?? "female",
+      type: toGroupType(me.type) ?? "top",
+    };
+    setGroupDefaults(defaults);
+    setGroups((prev) =>
+      prev.map((g) => {
+        // Untouched groups take the user's defaults; others only drop locked options.
+        if (!g.front && !g.back && g.clothingTags.length === 0) {
+          return {
+            ...g,
+            selectedOptions: [...defaults.selectedOptions],
+            gender: defaults.gender,
+            type: defaults.type,
+          };
+        }
+        if (canSelectAll) return g;
+        return {
+          ...g,
+          selectedOptions: g.selectedOptions.filter((id) => granted.includes(id)),
+        };
+      }),
+    );
+  }, [me, granted, canSelectAll]);
 
   useEffect(() => {
     return () => {
@@ -199,6 +253,10 @@ const HeroSection = () => {
   const toggleOption = (id: string) => {
     const activeGroup = groups[activeGroupIndex];
     if (!activeGroup) return;
+    if (allowedFeatureIds && !allowedFeatureIds.includes(id)) {
+      toast.error("You don't have permission to use this feature.");
+      return;
+    }
     updateGroup(activeGroup.id, (group) => ({
       ...group,
       selectedOptions: group.selectedOptions.includes(id)
@@ -226,6 +284,15 @@ const HeroSection = () => {
       return;
     }
 
+    const fallbackFeatures = getGroupDefaults().selectedOptions;
+    const needsFallback = groups.some((g) => g.selectedOptions.length === 0);
+    if (needsFallback && fallbackFeatures.length === 0) {
+      toast.error(
+        "No AI features are enabled for your account. Please contact an admin.",
+      );
+      return;
+    }
+
     persistGenerationLanguage(language);
     unlockNotificationSound();
 
@@ -238,9 +305,10 @@ const HeroSection = () => {
         features:
           g.selectedOptions.length > 0
             ? g.selectedOptions.map(mapGarmentOptionToApi)
-            : DEFAULT_GROUP_FEATURE_IDS.map(mapGarmentOptionToApi),
+            : fallbackFeatures.map(mapGarmentOptionToApi),
       })),
       language,
+      mode,
       gender: groups.map((g) => g.gender),
       type: groups.map((g) => g.type),
       // Only send when ≥1 tag exists — empty count makes backend forEach crash
@@ -285,7 +353,7 @@ const HeroSection = () => {
 
   return (
     <section className="py-10 lg:py-20 px-4 sm:px-6 bg-[#f7f9fa] pb-48 sm:pb-40">
-      <div className="max-w-7xl mx-auto flex flex-col items-center">
+      <div className="max-w-8xl mx-auto flex flex-col items-center">
         <div className="text-center max-w-7xl mb-8 md:mb-12">
           <motion.h1
             initial={{ opacity: 0, y: -20 }}
@@ -397,8 +465,11 @@ const HeroSection = () => {
         onActiveGroupChange={handleActiveGroupChange}
         selectedOptions={activeSelected}
         onToggleOption={toggleOption}
+        allowedFeatureIds={allowedFeatureIds}
         language={language}
         onLanguageChange={setLanguage}
+        mode={mode}
+        onModeChange={setMode}
         gender={activeGroup?.gender ?? "female"}
         type={activeGroup?.type ?? "top"}
         onGenderChange={(gender: GroupGender) => {

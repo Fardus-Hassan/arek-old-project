@@ -1,11 +1,12 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 import { getAccessToken } from "@/lib/auth-session";
 import type { ApiEnvelope } from "./types";
+import type { UserPermissionFields } from "@/lib/user-permissions";
 
 const baseUrl =
   process.env.NEXT_PUBLIC_API_URL ?? "https://api.aisizepro.com/api/v1";
 
-export type UserProfile = {
+export type UserProfile = UserPermissionFields & {
   id: string;
   firstName: string;
   lastName: string;

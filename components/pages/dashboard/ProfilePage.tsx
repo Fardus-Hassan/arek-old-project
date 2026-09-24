@@ -3,6 +3,7 @@
 import * as React from "react";
 import ChangePassword from "@/components/features/dashboard/profile/ChangePassword";
 import ProfileDetails from "@/components/features/dashboard/profile/ProfileDetails";
+import MyPermissions from "@/components/features/dashboard/profile/MyPermissions";
 import SocialMediaLinks from "@/components/features/dashboard/profile/SocialMediaLinks";
 import { ROLE_SUPERADMIN } from "@/lib/auth-constants";
 import { getUserRole } from "@/lib/auth-session";
@@ -25,6 +26,7 @@ const ProfilePage = () => {
 
         <div className="space-y-8">
           <ProfileDetails />
+          <MyPermissions />
           {isSuperAdmin ? <SocialMediaLinks /> : null}
           <ChangePassword />
         </div>

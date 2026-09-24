@@ -34,6 +34,27 @@ export type ImageGroup = {
 export const newGroupId = () =>
   `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
+export type GroupDefaults = {
+  selectedOptions: string[];
+  gender: GroupGender;
+  type: GroupType;
+};
+
+/** Per-user defaults (from /users/me); set by the Home page once loaded. */
+let groupDefaults: GroupDefaults = {
+  selectedOptions: [...DEFAULT_GROUP_FEATURE_IDS],
+  gender: DEFAULT_GROUP_GENDER,
+  type: DEFAULT_GROUP_TYPE,
+};
+
+export function setGroupDefaults(next: GroupDefaults) {
+  groupDefaults = { ...next, selectedOptions: [...next.selectedOptions] };
+}
+
+export function getGroupDefaults(): GroupDefaults {
+  return { ...groupDefaults, selectedOptions: [...groupDefaults.selectedOptions] };
+}
+
 export function createEmptyGroup(): ImageGroup {
   return {
     id: newGroupId(),
@@ -43,9 +64,9 @@ export function createEmptyGroup(): ImageGroup {
     backPreview: null,
     clothingTags: [],
     clothingTagPreviews: [],
-    selectedOptions: [...DEFAULT_GROUP_FEATURE_IDS],
-    gender: DEFAULT_GROUP_GENDER,
-    type: DEFAULT_GROUP_TYPE,
+    selectedOptions: [...groupDefaults.selectedOptions],
+    gender: groupDefaults.gender,
+    type: groupDefaults.type,
   };
 }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Lock } from "lucide-react";
 import { FEATURE_OPTIONS } from "./feature-options";
 import type { GroupGender, GroupType } from "./image-group-types";
 import { GroupGenderTypeControls } from "./GroupGenderTypeControls";
@@ -12,8 +12,12 @@ type StickyFeatureBarProps = {
   onActiveGroupChange: (index: number) => void;
   selectedOptions: string[];
   onToggleOption: (id: string) => void;
+  /** When set, features outside this list are locked. */
+  allowedFeatureIds?: string[];
   language: "English" | "Polish";
   onLanguageChange: (lang: "English" | "Polish") => void;
+  mode: "slow" | "fast";
+  onModeChange: (mode: "slow" | "fast") => void;
   gender: GroupGender;
   type: GroupType;
   onGenderChange: (gender: GroupGender) => void;
@@ -26,8 +30,11 @@ export function StickyFeatureBar({
   onActiveGroupChange,
   selectedOptions,
   onToggleOption,
+  allowedFeatureIds,
   language,
   onLanguageChange,
+  mode,
+  onModeChange,
   gender,
   type,
   onGenderChange,
@@ -38,7 +45,7 @@ export function StickyFeatureBar({
 
   return (
     <div className="fixed bottom-0 inset-x-0 z-50 border-t border-slate-200 bg-white/95 backdrop-blur-sm shadow-[0_-4px_20px_rgba(0,0,0,0.08)] pb-[env(safe-area-inset-bottom)]">
-      <div className="max-w-5xl mx-auto px-4 py-3 space-y-2.5">
+      <div className="max-w-6xl mx-auto px-4 py-3 space-y-2.5">
         <div className="flex flex-col lg:flex-row lg:items-center gap-2.5 lg:gap-3">
           <div className="flex items-center justify-center lg:justify-start gap-1 shrink-0">
             <button
@@ -76,19 +83,35 @@ export function StickyFeatureBar({
             </div>
           </div>
 
-          <div className="flex items-center justify-center lg:justify-end gap-2 shrink-0">
-            <span className="text-xs font-semibold text-slate-600 whitespace-nowrap">
-              Output language
-            </span>
-            <select
-              value={language}
-              onChange={(e) =>
-                onLanguageChange(e.target.value as "English" | "Polish")
-              }
-              className="h-8 px-2.5 rounded-lg border border-slate-200 bg-white text-xs text-slate-700 font-semibold focus:outline-none focus:ring-2 focus:ring-purple-300">
-              <option value="English">English</option>
-              <option value="Polish">Polish</option>
-            </select>
+          <div className="flex items-center justify-center lg:justify-end gap-2 sm:gap-3 shrink-0 flex-wrap">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-slate-600 whitespace-nowrap">
+                Output language
+              </span>
+              <select
+                value={language}
+                onChange={(e) =>
+                  onLanguageChange(e.target.value as "English" | "Polish")
+                }
+                className="h-8 px-2.5 rounded-lg border border-slate-200 bg-white text-xs text-slate-700 font-semibold focus:outline-none focus:ring-2 focus:ring-purple-300">
+                <option value="English">English</option>
+                <option value="Polish">Polish</option>
+              </select>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-slate-600 whitespace-nowrap">
+                Mode
+              </span>
+              <select
+                value={mode}
+                onChange={(e) =>
+                  onModeChange(e.target.value as "slow" | "fast")
+                }
+                className="h-8 px-2.5 rounded-lg border border-slate-200 bg-white text-xs text-slate-700 font-semibold focus:outline-none focus:ring-2 focus:ring-purple-300">
+                <option value="slow">Slow</option>
+                <option value="fast">Fast</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -96,15 +119,23 @@ export function StickyFeatureBar({
           {FEATURE_OPTIONS.map((option) => {
             const Icon = option.icon;
             const isSelected = selectedOptions.includes(option.id);
+            const isLocked =
+              !!allowedFeatureIds && !allowedFeatureIds.includes(option.id);
 
             return (
               <button
                 key={option.id}
                 type="button"
+                disabled={isLocked}
+                title={isLocked ? "Not included in your permissions" : undefined}
                 onClick={() => onToggleOption(option.id)}
-                className={`flex flex-col items-center justify-center p-2 sm:p-2.5 rounded-xl border-2 transition-all bg-white min-h-[56px] sm:min-h-[64px]
+                className={`relative flex flex-col items-center justify-center p-2 sm:p-2.5 rounded-xl border-2 transition-all bg-white min-h-[56px] sm:min-h-[64px]
                   ${isSelected ? "border-[#A825C7] bg-[#F9F1FB]" : "border-[#E5BEEE] hover:border-purple-200"}
+                  ${isLocked ? "cursor-not-allowed opacity-40 hover:border-[#E5BEEE]" : ""}
                 `}>
+                {isLocked ? (
+                  <Lock className="absolute right-1.5 top-1.5 h-3 w-3 text-slate-400" />
+                ) : null}
                 <Icon
                   size={16}
                   className={`mb-1 ${isSelected ? "text-[#A825C7]" : "text-slate-400"}`}

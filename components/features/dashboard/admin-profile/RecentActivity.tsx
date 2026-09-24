@@ -14,6 +14,7 @@ import {
   useGetRecentActivityQuery,
   useGetSingleAdminQuery,
 } from "@/lib/api/adminApi";
+import { formatDateTime } from "@/lib/format-datetime";
 
 export default function RecentActivity() {
   const searchParams = useSearchParams();
@@ -93,7 +94,7 @@ export default function RecentActivity() {
                   key={activity.id}
                   className="hover:bg-gray-50 border-gray-100">
                   <TableCell className="py-5 font-medium text-gray-700 text-center text-base">
-                    {activity.dateFormat}
+                    {formatDateTime(activity.dateFormat)}
                   </TableCell>
                   <TableCell className="py-5 text-[#1C1C1C] text-center text-base">
                     {activity.product_title ?? "N/A"}
@@ -128,7 +129,7 @@ export default function RecentActivity() {
             <div className="flex items-start justify-between">
               <div className="flex-1">
                 <h3 className="font-semibold text-gray-900 text-base">
-                  {activity.dateFormat}
+                  {formatDateTime(activity.dateFormat)}
                 </h3>
                 <div className="flex items-center gap-4 mt-2">
                   <div className="flex items-center gap-2">

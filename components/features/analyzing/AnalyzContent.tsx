@@ -28,6 +28,7 @@ import {
   updateGenerationJobProgress,
 } from "@/lib/generation-jobs-storage";
 import { getRtkQueryErrorMessage } from "@/lib/api/authApi";
+import { formatDateTime } from "@/lib/format-datetime";
 import { Button } from "@/components/ui/button";
 
 export default function AnalyzContent() {
@@ -328,7 +329,7 @@ export default function AnalyzContent() {
           <p className="text-xs text-slate-400 text-center mt-2 break-all">
             Product id: {productId}
             {lastCheckedAt
-              ? ` · Last check ${new Date(lastCheckedAt).toLocaleTimeString()}`
+              ? ` · Last check ${formatDateTime(lastCheckedAt)}`
               : null}
           </p>
         </div>

@@ -49,20 +49,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { formatDateTime } from "@/lib/format-datetime";
 
 function formatSavedAt(iso: string): string {
-  try {
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return "Unknown time";
-    return d.toLocaleString(undefined, {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return "Unknown time";
-  }
+  return formatDateTime(iso);
 }
 
 function shortId(id: string): string {

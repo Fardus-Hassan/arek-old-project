@@ -2,8 +2,10 @@
 
 import { useSearchParams } from "next/navigation";
 import { useGetSingleAdminQuery } from "@/lib/api/adminApi";
+import { formatDateTime } from "@/lib/format-datetime";
 import { DEFAULT_PROFILE_AVATAR, getProfileImageUrl } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
+import { UserPermissionsCard } from "@/components/shared/UserPermissionsCard";
 
 interface StatCardProps {
   label: string;
@@ -48,13 +50,11 @@ export default function AdminDetailsCard() {
   const stats = [
     {
       label: "Since",
-      value: admin?.createdAt
-        ? new Date(admin.createdAt).toLocaleDateString()
-        : "N/A",
+      value: admin?.createdAt ? formatDateTime(admin.createdAt) : "N/A",
     },
     { label: "Created Products", value: `${admin?.totalCreatedProducts ?? 0}` },
     { label: "Generated Images", value: `${admin?.totalGeneratedProducts ?? 0}` },
-    { label: "Role", value: "ADMIN" },
+    { label: "Role", value: admin?.role ? String(admin.role) : "N/A" },
   ];
 
   if (isLoading) {
@@ -124,6 +124,14 @@ export default function AdminDetailsCard() {
           ))}
         </div>
       </div>
+
+      {adminId && admin ? (
+        <UserPermissionsCard
+          className="mt-8 sm:mt-10"
+          userId={adminId}
+          user={admin}
+        />
+      ) : null}
     </div>
   );
 }

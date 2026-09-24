@@ -5,6 +5,7 @@ import type {
   ShopifyUploadMultipleResponse,
   ShopifyUploadProductResult,
 } from "@/lib/api/shopifyApi";
+import { formatDateTime } from "@/lib/format-datetime";
 
 /** Status a non-technical person can read */
 export type ShopifyUserStatus = "success" | "failed" | "partial" | "none";
@@ -68,14 +69,8 @@ export function humanizeFieldKey(raw?: string | null): string {
 
 function formatWhen(iso?: string | null): string | undefined {
   if (!iso) return undefined;
-  try {
-    return new Date(iso).toLocaleString(undefined, {
-      dateStyle: "medium",
-      timeStyle: "short",
-    });
-  } catch {
-    return String(iso);
-  }
+  const formatted = formatDateTime(iso);
+  return formatted === "—" ? undefined : formatted;
 }
 
 function metafieldDetail(m: ShopifyMetafieldResult): string | undefined {

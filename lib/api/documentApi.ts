@@ -98,7 +98,12 @@ export const documentApi = createApi({
         data: DocumentListItem[];
         meta: Meta;
       },
-      { page?: number; limit?: number; search?: string }
+      {
+        page?: number;
+        limit?: number;
+        search?: string;
+        isShopifyUploaded?: boolean;
+      }
     >({
       query: (params) => ({ url: "/documents", method: "GET", params }),
       providesTags: ["Documents"],

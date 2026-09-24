@@ -2,6 +2,7 @@
 
 import CustomPagination from "@/components/shared/CustomPagination";
 import { Button } from "@/components/ui/button";
+import { formatDateTime } from "@/lib/format-datetime";
 import {
   Dialog,
   DialogContent,
@@ -561,6 +562,9 @@ const DocumentsPage = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [searchText, setSearchText] = useState("");
+  const [shopifyFilter, setShopifyFilter] = useState<
+    "all" | "uploaded" | "not_uploaded"
+  >("all");
   const [isViewOpen, setIsViewOpen] = useState(false);
   const [viewResponse, setViewResponse] = useState<ApiEnvelope<SingleDocument> | null>(null);
   const [viewError, setViewError] = useState<string>("");
@@ -599,6 +603,8 @@ const DocumentsPage = () => {
     page: currentPage,
     limit: itemsPerPage,
     search: searchText || undefined,
+    isShopifyUploaded:
+      shopifyFilter === "all" ? undefined : shopifyFilter === "uploaded",
   });
   const [deleteDocument, { isLoading: isDeleting }] = useDeleteDocumentMutation();
   const [getSingleDocument, { isFetching: isViewing }] =
@@ -884,6 +890,22 @@ const DocumentsPage = () => {
             </SelectContent>
           </Select> */}
 
+          <Select
+            value={shopifyFilter}
+            onValueChange={(v) => {
+              setShopifyFilter(v as "all" | "uploaded" | "not_uploaded");
+              setCurrentPage(1);
+            }}>
+            <SelectTrigger className="w-full sm:w-[190px] bg-white rounded-full border-gray-200">
+              <SelectValue placeholder="Shopify status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All documents</SelectItem>
+              <SelectItem value="uploaded">Uploaded to Shopify</SelectItem>
+              <SelectItem value="not_uploaded">Not uploaded</SelectItem>
+            </SelectContent>
+          </Select>
+
           {/* Search */}
           <div className="relative w-full sm:w-[280px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -949,7 +971,7 @@ const DocumentsPage = () => {
                   key={doc.id}
                   className="hover:bg-gray-50 border-gray-100">
                   <TableCell className="font-medium text-gray-700 py-3 px-4 whitespace-nowrap">
-                    {doc.dateFormat}
+                    {formatDateTime(doc.dateFormat)}
                   </TableCell>
                   <TableCell className="text-gray-700 py-3 px-4 whitespace-nowrap">
                     {doc.product_title ?? "N/A"}
@@ -1028,7 +1050,7 @@ const DocumentsPage = () => {
             <div className="flex items-center justify-between pb-2 border-b border-gray-100">
               <span className="text-xs text-gray-500">Date & Time</span>
               <span className="text-sm font-medium text-gray-700">
-                {doc.dateFormat}
+                {formatDateTime(doc.dateFormat)}
               </span>
             </div>
 

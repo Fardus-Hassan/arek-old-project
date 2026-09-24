@@ -34,6 +34,7 @@ import {
   useGetDashboardOverviewQuery,
   useGetRecentActivityQuery,
 } from "@/lib/api/adminApi";
+import { formatDateTime } from "@/lib/format-datetime";
 
 const Overview = () => {
   const [currentPage, setCurrentPage] = useState(1);
@@ -202,7 +203,7 @@ const Overview = () => {
                     key={activity.id}
                     className="hover:bg-gray-50 border-gray-100">
                     <TableCell className="font-medium text-gray-700 py-2 sm:py-3 px-3 sm:px-4 whitespace-nowrap text-xs sm:text-sm">
-                      {activity.dateFormat}
+                      {formatDateTime(activity.dateFormat)}
                     </TableCell>
                     <TableCell className="text-gray-700 py-2 sm:py-3 px-3 sm:px-4 whitespace-nowrap text-xs sm:text-sm">
                       {activity.product_title ?? "N/A"}

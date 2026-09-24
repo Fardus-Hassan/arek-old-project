@@ -12,6 +12,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useSidebar } from "@/components/ui/sidebar";
+import { formatDateTime } from "@/lib/format-datetime";
 import { Download, ExternalLink, Loader2, Upload } from "lucide-react";
 import { useMemo, useState } from "react";
 import Image from "next/image";
@@ -281,7 +282,7 @@ export default function SavedFilesPage() {
                       ) : null}
                     </TableCell>
                     <TableCell className="truncate px-3 py-3 text-sm text-gray-700">
-                      {f.savedAt ?? "—"}
+                      {f.savedAt ? formatDateTime(f.savedAt) : "—"}
                     </TableCell>
                     <TableCell
                       className="truncate px-3 py-3 text-sm text-gray-700"
@@ -407,7 +408,7 @@ export default function SavedFilesPage() {
                     />
                   )}
                   <span className="truncate text-xs text-gray-500">
-                    {f.savedAt ?? "—"}
+                    {f.savedAt ? formatDateTime(f.savedAt) : "—"}
                   </span>
                 </div>
                 <span

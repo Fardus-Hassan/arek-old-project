@@ -73,7 +73,7 @@ export default function Navbar() {
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
-            {hasToken ? <SavedBatchesNavButton /> : null}
+            {/* {hasToken ? <SavedBatchesNavButton /> : null} */}
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

@@ -1,6 +1,10 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 import { getAccessToken } from "@/lib/auth-session";
 import type { ApiEnvelope } from "./types";
+import type {
+  UserPermissionFields,
+  UserPermissionsPayload,
+} from "@/lib/user-permissions";
 
 
 
@@ -9,13 +13,30 @@ import type { ApiEnvelope } from "./types";
 const baseUrl =
   process.env.NEXT_PUBLIC_API_URL ?? "https://api.aisizepro.com/api/v1";
 
-export type AdminRow = {
+export type AdminRow = UserPermissionFields & {
   id: string;
   firstName: string;
   lastName: string;
   email: string;
   role: string;
   status: string;
+};
+
+export type UpdateUserPayload = UserPermissionsPayload & {
+  role?: "USER" | "ADMIN" | "SUPERADMIN";
+};
+
+export type UpdatedUserData = UserPermissionFields & {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  image: string | null;
+  location: string | null;
+  phone: string | null;
+  role: string;
+  status: string;
+  updatedAt: string;
 };
 
 type PaginatedMeta = {
@@ -36,7 +57,7 @@ type AdminListResponse = {
   data: AdminRow[];
 };
 
-export type SingleAdminData = {
+export type SingleAdminData = UserPermissionFields & {
   id: string;
   firstName: string;
   lastName: string;
@@ -119,6 +140,17 @@ export const adminApi = createApi({
       query: (id) => ({ url: `/admin/remove-admin/${id}`, method: "DELETE" }),
       invalidatesTags: ["Admin"],
     }),
+    updateUser: builder.mutation<
+      ApiEnvelope<UpdatedUserData>,
+      { id: string; body: UpdateUserPayload }
+    >({
+      query: ({ id, body }) => ({
+        url: `/admin/update-user/${id}`,
+        method: "PATCH",
+        body,
+      }),
+      invalidatesTags: ["Admin"],
+    }),
     getSocialMedia: builder.query<ApiEnvelope<SocialMediaData>, void>({
       query: () => ({ url: "/admin/get-social-media", method: "GET" }),
       providesTags: ["Social"],
@@ -163,6 +195,7 @@ export const {
   useGetAllAdminsQuery,
   useGetSingleAdminQuery,
   useRemoveAdminMutation,
+  useUpdateUserMutation,
   useGetSocialMediaQuery,
   useAddSocialMediaMutation,
   useUpdateSocialMediaMutation,

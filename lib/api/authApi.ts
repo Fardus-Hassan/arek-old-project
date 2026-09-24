@@ -2,6 +2,7 @@ import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 import type { FetchBaseQueryError } from "@reduxjs/toolkit/query";
 import { getAccessToken } from "@/lib/auth-session";
 import type { ApiEnvelope } from "./types";
+import type { UserPermissionsPayload } from "@/lib/user-permissions";
 
 const baseUrl =
   process.env.NEXT_PUBLIC_API_URL ?? "https://api.aisizepro.com/api/v1";
@@ -34,12 +35,12 @@ type ResetPasswordResultData = {
   message: string;
 };
 
-type AddAdminPayload = {
+type AddAdminPayload = UserPermissionsPayload & {
   firstName: string;
   lastName: string;
   email: string;
   password: string;
-  role: "ADMIN";
+  role: "USER" | "ADMIN";
 };
 
 type ChangePasswordPayload = {

@@ -25,17 +25,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useSidebar } from "@/components/ui/sidebar";
+import { formatDateTime } from "@/lib/format-datetime";
 
 function formatWhen(iso?: string | null): string {
   if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleString(undefined, {
-      dateStyle: "medium",
-      timeStyle: "short",
-    });
-  } catch {
-    return String(iso);
-  }
+  return formatDateTime(iso);
 }
 
 export default function ShopifyUploadHistoryPage() {

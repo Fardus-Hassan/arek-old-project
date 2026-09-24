@@ -31,6 +31,12 @@ import {
   useRemoveAdminMutation,
 } from "@/lib/api/adminApi";
 import { useAddAdminMutation, getRtkQueryErrorMessage } from "@/lib/api/authApi";
+import { UserPermissionsEditor } from "@/components/shared/UserPermissionsEditor";
+import {
+  EMPTY_PERMISSIONS,
+  type UserPermissionsPayload,
+} from "@/lib/user-permissions";
+import { cn } from "@/lib/utils";
 
 const AdminManagementPage = () => {
   const [currentPage, setCurrentPage] = useState(1);
@@ -54,6 +60,9 @@ const AdminManagementPage = () => {
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [role, setRole] = useState<"USER" | "ADMIN">("USER");
+  const [permissions, setPermissions] =
+    useState<UserPermissionsPayload>(EMPTY_PERMISSIONS);
 
   const [isRemoveModalOpen, setIsRemoveModalOpen] = useState(false);
   const [adminToRemove, setAdminToRemove] = useState<string | null>(null);
@@ -63,6 +72,8 @@ const AdminManagementPage = () => {
     setLastName("");
     setEmail("");
     setPassword("");
+    setRole("USER");
+    setPermissions(EMPTY_PERMISSIONS);
   };
 
   const handleAddAdmin = async () => {
@@ -79,9 +90,10 @@ const AdminManagementPage = () => {
         lastName: ln,
         email: em,
         password,
-        role: "ADMIN",
+        role,
+        ...permissions,
       }).unwrap();
-      toast.success(res.message || "Admin added successfully.");
+      toast.success(res.message || "User added successfully.");
       setIsAddModalOpen(false);
       resetAddForm();
       refetch();
@@ -124,21 +136,21 @@ const AdminManagementPage = () => {
           <DialogTrigger asChild>
             <Button className="w-full sm:w-auto bg-[#A655F6] hover:bg-[#9344E0] text-white rounded-md px-6">
               <Plus className="h-5 w-5 mr-2" />
-              Add Admin
+              Add User
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px] p-6 bg-white rounded-xl max-h-[90vh] overflow-y-auto">
+          <DialogContent
+            data-lenis-prevent
+            className="sm:max-w-[560px] p-6 bg-white rounded-xl max-h-[90vh] overflow-y-auto">
             <DialogHeader className="mb-4">
               <div className="flex items-center gap-2 mb-2 text-[#A655F6] font-bold text-lg">
                 <span>Resale AI</span>
               </div>
               <DialogTitle className="text-2xl font-bold text-gray-900">
-                Add new admin
+                Add new user
               </DialogTitle>
               <p className="text-gray-500 mt-2 text-sm leading-relaxed">
-                Invite up to 5 team members to join your plan. Once they accept
-                your invitation, they&apos;ll get access to modify
-                Solicitation&apos;s under your subscription.
+                Choose a role and which AI features this person can use.
               </p>
             </DialogHeader>
 
@@ -196,6 +208,38 @@ const AdminManagementPage = () => {
                   onChange={(e) => setPassword(e.target.value)}
                 />
               </div>
+
+              <div className="space-y-2">
+                <Label className="text-gray-700 font-medium">Role</Label>
+                <div className="flex gap-2">
+                  {(["USER", "ADMIN"] as const).map((r) => (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => setRole(r)}
+                      className={cn(
+                        "flex-1 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors",
+                        role === r
+                          ? "border-[#A825C7] bg-[#F9F1FB] text-[#A825C7]"
+                          : "border-gray-200 bg-white text-gray-600 hover:border-purple-200",
+                      )}>
+                      {r === "USER" ? "User" : "Admin"}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-500">
+                  {role === "USER"
+                    ? "Users can only use the features granted below (unless Full access is on)."
+                    : "Admins start with the granted features selected and can use any feature."}
+                </p>
+              </div>
+
+              <div className="border-t border-gray-100 pt-4">
+                <UserPermissionsEditor
+                  value={permissions}
+                  onChange={setPermissions}
+                />
+              </div>
             </div>
 
             <DialogFooter className="mt-8 gap-3 sm:gap-2 flex-col sm:flex-row">
@@ -210,7 +254,7 @@ const AdminManagementPage = () => {
                 onClick={handleAddAdmin}
                 disabled={isAdding}
                 className="w-full sm:w-auto bg-[#A655F6] hover:bg-[#9344E0] text-white h-10 px-6">
-                {isAdding ? "Adding..." : "Add admin"}
+                {isAdding ? "Adding..." : "Add user"}
               </Button>
             </DialogFooter>
           </DialogContent>
