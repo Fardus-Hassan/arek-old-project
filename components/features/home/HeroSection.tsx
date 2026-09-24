@@ -33,6 +33,8 @@ import {
 } from "@/lib/user-permissions";
 import {
   createEmptyGroup,
+  DEFAULT_GROUP_GENDER,
+  DEFAULT_GROUP_TYPE,
   getGroupDefaults,
   setGroupDefaults,
   revokeGroupTagPreviews,
@@ -92,19 +94,19 @@ const HeroSection = () => {
     setGroupDefaults(defaults);
     setGroups((prev) =>
       prev.map((g) => {
-        // Untouched groups take the user's defaults; others only drop locked options.
-        if (!g.front && !g.back && g.clothingTags.length === 0) {
-          return {
-            ...g,
-            selectedOptions: [...defaults.selectedOptions],
-            gender: defaults.gender,
-            type: defaults.type,
-          };
-        }
-        if (canSelectAll) return g;
+        // Untouched groups take the user's defaults; unset fields get filled; locked options drop.
+        const untouched = !g.front && !g.back && g.clothingTags.length === 0;
+        const allowed = canSelectAll
+          ? g.selectedOptions
+          : g.selectedOptions.filter((id) => granted.includes(id));
         return {
           ...g,
-          selectedOptions: g.selectedOptions.filter((id) => granted.includes(id)),
+          selectedOptions:
+            untouched || allowed.length === 0
+              ? [...defaults.selectedOptions]
+              : allowed,
+          gender: untouched || !g.gender ? defaults.gender : g.gender,
+          type: untouched || !g.type ? defaults.type : g.type,
         };
       }),
     );
@@ -284,7 +286,13 @@ const HeroSection = () => {
       return;
     }
 
-    const fallbackFeatures = getGroupDefaults().selectedOptions;
+    if (hasToken && !me) {
+      toast.error("Loading your permissions… please try again in a moment.");
+      return;
+    }
+    const fallbackFeatures = me
+      ? getGroupDefaults().selectedOptions
+      : [...DEFAULT_GROUP_FEATURE_IDS];
     const needsFallback = groups.some((g) => g.selectedOptions.length === 0);
     if (needsFallback && fallbackFeatures.length === 0) {
       toast.error(
@@ -309,8 +317,12 @@ const HeroSection = () => {
       })),
       language,
       mode,
-      gender: groups.map((g) => g.gender),
-      type: groups.map((g) => g.type),
+      gender: groups.map(
+        (g) => g.gender ?? getGroupDefaults().gender ?? DEFAULT_GROUP_GENDER,
+      ),
+      type: groups.map(
+        (g) => g.type ?? getGroupDefaults().type ?? DEFAULT_GROUP_TYPE,
+      ),
       // Only send when ≥1 tag exists — empty count makes backend forEach crash
       ...(hasClothingTags
         ? { clothing_tags_count: groups.map((g) => g.clothingTags.length) }
@@ -470,8 +482,8 @@ const HeroSection = () => {
         onLanguageChange={setLanguage}
         mode={mode}
         onModeChange={setMode}
-        gender={activeGroup?.gender ?? "female"}
-        type={activeGroup?.type ?? "top"}
+        gender={activeGroup?.gender ?? null}
+        type={activeGroup?.type ?? null}
         onGenderChange={(gender: GroupGender) => {
           if (!activeGroup) return;
           updateGroup(activeGroup.id, (g) => ({ ...g, gender }));

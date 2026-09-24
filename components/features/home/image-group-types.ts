@@ -1,5 +1,3 @@
-import { DEFAULT_GROUP_FEATURE_IDS } from "./feature-options";
-
 export type GroupSlot = "front" | "back";
 
 export const GROUP_GENDERS = ["male", "female"] as const;
@@ -27,8 +25,9 @@ export type ImageGroup = {
   clothingTags: File[];
   clothingTagPreviews: string[];
   selectedOptions: string[];
-  gender: GroupGender;
-  type: GroupType;
+  /** null until the user's defaults load from /users/me */
+  gender: GroupGender | null;
+  type: GroupType | null;
 };
 
 export const newGroupId = () =>
@@ -36,15 +35,15 @@ export const newGroupId = () =>
 
 export type GroupDefaults = {
   selectedOptions: string[];
-  gender: GroupGender;
-  type: GroupType;
+  gender: GroupGender | null;
+  type: GroupType | null;
 };
 
 /** Per-user defaults (from /users/me); set by the Home page once loaded. */
 let groupDefaults: GroupDefaults = {
-  selectedOptions: [...DEFAULT_GROUP_FEATURE_IDS],
-  gender: DEFAULT_GROUP_GENDER,
-  type: DEFAULT_GROUP_TYPE,
+  selectedOptions: [],
+  gender: null,
+  type: null,
 };
 
 export function setGroupDefaults(next: GroupDefaults) {

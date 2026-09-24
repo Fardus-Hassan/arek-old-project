@@ -6,8 +6,8 @@ import type { GroupGender, GroupType } from "./image-group-types";
 import { GROUP_GENDERS, GROUP_TYPES } from "./image-group-types";
 
 type GroupGenderTypeControlsProps = {
-  gender: GroupGender;
-  type: GroupType;
+  gender: GroupGender | null;
+  type: GroupType | null;
   onGenderChange: (gender: GroupGender) => void;
   onTypeChange: (type: GroupType) => void;
   /** Compact chips for sticky bar; default for group card */

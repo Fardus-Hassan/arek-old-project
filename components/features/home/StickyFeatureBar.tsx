@@ -18,8 +18,8 @@ type StickyFeatureBarProps = {
   onLanguageChange: (lang: "English" | "Polish") => void;
   mode: "slow" | "fast";
   onModeChange: (mode: "slow" | "fast") => void;
-  gender: GroupGender;
-  type: GroupType;
+  gender: GroupGender | null;
+  type: GroupType | null;
   onGenderChange: (gender: GroupGender) => void;
   onTypeChange: (type: GroupType) => void;
 };
