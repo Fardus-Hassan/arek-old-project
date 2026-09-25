@@ -3,6 +3,7 @@ export const AUTH_ACCESS_TOKEN_KEY = "accessToken";
 export const AUTH_USER_ROLE_KEY = "userRole";
 
 export const ROLE_SUPERADMIN = "SUPERADMIN";
+export const ROLE_ADMIN = "ADMIN";
 
 export const LOGIN_PATH = "/login";
 
@@ -16,10 +17,14 @@ const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
 
 export { COOKIE_MAX_AGE_SECONDS };
 
-/** Overview + admin management + feature settings — SUPERADMIN only. */
+/** Overview + feature settings — SUPERADMIN only. */
 export function isSuperAdminOnlyDashboardPath(pathname: string): boolean {
   if (pathname === "/dashboard/admin") return true;
-  if (pathname.startsWith("/dashboard/admin/admin-management")) return true;
   if (pathname.startsWith("/dashboard/admin/feature-settings")) return true;
   return false;
+}
+
+/** Admin management (add / edit users) — ADMIN and SUPERADMIN. */
+export function isAdminOnlyDashboardPath(pathname: string): boolean {
+  return pathname.startsWith("/dashboard/admin/admin-management");
 }

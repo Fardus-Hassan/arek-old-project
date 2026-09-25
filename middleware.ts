@@ -4,9 +4,11 @@ import {
   ADMIN_DASHBOARD_FALLBACK,
   AUTH_ACCESS_TOKEN_KEY,
   AUTH_USER_ROLE_KEY,
+  isAdminOnlyDashboardPath,
   isSuperAdminOnlyDashboardPath,
   LANDING_PATH,
   LOGIN_PATH,
+  ROLE_ADMIN,
   ROLE_SUPERADMIN,
 } from "@/lib/auth-constants";
 
@@ -47,6 +49,14 @@ export function middleware(request: NextRequest) {
   }
 
   if (isSuperAdminOnlyDashboardPath(pathname) && role !== ROLE_SUPERADMIN) {
+    return NextResponse.redirect(new URL(ADMIN_DASHBOARD_FALLBACK, request.url));
+  }
+
+  if (
+    isAdminOnlyDashboardPath(pathname) &&
+    role !== ROLE_SUPERADMIN &&
+    role !== ROLE_ADMIN
+  ) {
     return NextResponse.redirect(new URL(ADMIN_DASHBOARD_FALLBACK, request.url));
   }
 

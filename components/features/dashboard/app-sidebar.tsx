@@ -32,7 +32,7 @@ import { documentApi } from "@/lib/api/documentApi";
 import { fileSaveApi } from "@/lib/api/fileSaveApi";
 import { featureApi } from "@/lib/api/featureApi";
 import { shopifyApi } from "@/lib/api/shopifyApi";
-import { LOGIN_PATH, ROLE_SUPERADMIN } from "@/lib/auth-constants";
+import { LOGIN_PATH, ROLE_ADMIN, ROLE_SUPERADMIN } from "@/lib/auth-constants";
 import { clearAuthSession, getUserRole } from "@/lib/auth-session";
 
 const allNavigationItems = [
@@ -40,43 +40,43 @@ const allNavigationItems = [
     label: "Overview",
     href: "/dashboard/admin",
     icon: LayoutDashboard,
-    superAdminOnly: true,
+    access: "superadmin",
   },
   {
     label: "My Profile",
     href: "/dashboard/admin/profile",
     icon: User,
-    superAdminOnly: false,
+    access: "all",
   },
   {
     label: "My Document",
     href: "/dashboard/admin/documents",
     icon: FileText,
-    superAdminOnly: false,
+    access: "all",
   },
   {
     label: "My Saved Files",
     href: "/dashboard/admin/saved-files",
     icon: FolderOpen,
-    superAdminOnly: false,
+    access: "all",
   },
   {
     label: "Admin Management",
     href: "/dashboard/admin/admin-management",
     icon: Shield,
-    superAdminOnly: true,
+    access: "admin",
   },
   {
     label: "Feature Settings",
     href: "/dashboard/admin/feature-settings",
     icon: Settings,
-    superAdminOnly: true,
+    access: "superadmin",
   },
   {
     label: "Shopify uploads",
     href: "/dashboard/admin/shopify-uploads",
     icon: ShoppingBag,
-    superAdminOnly: false,
+    access: "all",
   },
 ] as const;
 
@@ -91,13 +91,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   }, []);
 
   const isSuperAdmin = role === ROLE_SUPERADMIN;
+  const isAdmin = isSuperAdmin || role === ROLE_ADMIN;
 
   const navigationItems = React.useMemo(
     () =>
-      allNavigationItems.filter(
-        (item) => !item.superAdminOnly || isSuperAdmin,
-      ),
-    [isSuperAdmin],
+      allNavigationItems.filter((item) => {
+        if (item.access === "superadmin") return isSuperAdmin;
+        if (item.access === "admin") return isAdmin;
+        return true;
+      }),
+    [isSuperAdmin, isAdmin],
   );
 
   const onLogout = () => {

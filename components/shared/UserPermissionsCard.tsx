@@ -10,6 +10,8 @@ import { useUpdateUserMutation } from "@/lib/api/adminApi";
 import { userApi } from "@/lib/api/userApi";
 import { getRtkQueryErrorMessage } from "@/lib/api/authApi";
 import { useAppDispatch } from "@/lib/hooks";
+import { ROLE_SUPERADMIN } from "@/lib/auth-constants";
+import { getUserRole } from "@/lib/auth-session";
 import { cn } from "@/lib/utils";
 import {
   permissionsFromUser,
@@ -42,6 +44,12 @@ export function UserPermissionsCard({
     currentRole === "ADMIN" ? "ADMIN" : "USER",
   );
   const canEditRole = !isSelf && currentRole !== "SUPERADMIN";
+  const [viewerRole, setViewerRole] = useState<string | null>(null);
+  useEffect(() => {
+    setViewerRole(getUserRole());
+  }, []);
+  const canEdit =
+    isSelf || currentRole !== "SUPERADMIN" || viewerRole === ROLE_SUPERADMIN;
 
   useEffect(() => {
     if (isEditing) return;
@@ -85,7 +93,7 @@ export function UserPermissionsCard({
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {!isEditing ? (
+          {!canEdit ? null : !isEditing ? (
             <Button
               type="button"
               variant="outline"
