@@ -1,7 +1,10 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 import { getAccessToken } from "@/lib/auth-session";
 import type { ApiEnvelope } from "./types";
-import type { UserPermissionFields } from "@/lib/user-permissions";
+import type {
+  UserPermissionFields,
+  UserPermissionsPayload,
+} from "@/lib/user-permissions";
 
 const baseUrl =
   process.env.NEXT_PUBLIC_API_URL ?? "https://api.aisizepro.com/api/v1";
@@ -70,6 +73,21 @@ export const userApi = createApi({
       },
       invalidatesTags: ["User"],
     }),
+    updateMyPermissions: builder.mutation<
+      ApiEnvelope<UserProfile>,
+      UserPermissionsPayload
+    >({
+      query: (permissions) => {
+        const formData = new FormData();
+        formData.append("bodyData", JSON.stringify(permissions));
+        return {
+          url: "/users/profile",
+          method: "PATCH",
+          body: formData,
+        };
+      },
+      invalidatesTags: ["User"],
+    }),
   }),
 });
 
@@ -77,4 +95,5 @@ export const {
   useGetMeQuery,
   useUpdateProfileImageMutation,
   useUpdateProfileMutation,
+  useUpdateMyPermissionsMutation,
 } = userApi;

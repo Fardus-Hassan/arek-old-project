@@ -7,9 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { UserPermissionsEditor } from "@/components/shared/UserPermissionsEditor";
 import { useUpdateUserMutation } from "@/lib/api/adminApi";
-import { userApi } from "@/lib/api/userApi";
+import { useUpdateMyPermissionsMutation } from "@/lib/api/userApi";
 import { getRtkQueryErrorMessage } from "@/lib/api/authApi";
-import { useAppDispatch } from "@/lib/hooks";
 import { ROLE_SUPERADMIN } from "@/lib/auth-constants";
 import { getUserRole } from "@/lib/auth-session";
 import { cn } from "@/lib/utils";
@@ -22,7 +21,7 @@ import {
 type UserPermissionsCardProps = {
   userId: string;
   user: UserPermissionFields | null | undefined;
-  /** Own profile: refresh /users/me after save; role is not editable. */
+  /** Own profile: saves via PATCH /users/profile; role is not editable. */
   isSelf?: boolean;
   className?: string;
 };
@@ -33,8 +32,10 @@ export function UserPermissionsCard({
   isSelf = false,
   className,
 }: UserPermissionsCardProps) {
-  const dispatch = useAppDispatch();
-  const [updateUser, { isLoading }] = useUpdateUserMutation();
+  const [updateUser, { isLoading: isUpdatingUser }] = useUpdateUserMutation();
+  const [updateMyPermissions, { isLoading: isUpdatingSelf }] =
+    useUpdateMyPermissionsMutation();
+  const isLoading = isUpdatingUser || isUpdatingSelf;
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState<UserPermissionsPayload>(() =>
     permissionsFromUser(user),
@@ -59,16 +60,17 @@ export function UserPermissionsCard({
 
   const handleSave = async () => {
     try {
-      const res = await updateUser({
-        id: userId,
-        body: {
-          ...draft,
-          ...(canEditRole ? { role } : {}),
-        },
-      }).unwrap();
+      const res = isSelf
+        ? await updateMyPermissions(draft).unwrap()
+        : await updateUser({
+            id: userId,
+            body: {
+              ...draft,
+              ...(canEditRole ? { role } : {}),
+            },
+          }).unwrap();
       toast.success(res.message || "Permissions updated");
       setIsEditing(false);
-      if (isSelf) dispatch(userApi.util.invalidateTags(["User"]));
     } catch (err) {
       toast.error(getRtkQueryErrorMessage(err));
     }
