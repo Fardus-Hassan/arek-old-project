@@ -213,8 +213,9 @@ function SlotDropzone({
         {...rootProps}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
-        className={`relative min-h-[160px] sm:min-h-[180px] rounded-2xl border-2 border-dashed transition-all duration-300 overflow-hidden
-          ${isDragActive ? "border-[#E5BEEE] bg-[#F9F1FB]" : "border-purple-100 bg-white hover:border-purple-200"}
+        className={`relative rounded-2xl border-2 border-dashed transition-all duration-300 overflow-hidden
+          ${previewUrl ? "h-[280px] sm:h-[320px]" : "min-h-[160px] sm:min-h-[180px]"}
+          ${isDragActive ? "border-[#E5BEEE] bg-[#F9F1FB]" : previewUrl ? "border-purple-100 bg-slate-50 hover:border-purple-200" : "border-purple-100 bg-white hover:border-purple-200"}
           ${previewUrl ? "" : "cursor-pointer"}
         `}>
         <input {...getInputProps()} />
@@ -230,7 +231,7 @@ function SlotDropzone({
               src={previewUrl}
               alt={`${label} preview`}
               draggable={false}
-              className="w-full h-full object-cover pointer-events-none"
+              className="w-full h-full object-contain p-2 pointer-events-none"
             />
             <button
               type="button"
